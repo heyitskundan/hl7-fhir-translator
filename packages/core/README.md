@@ -1,4 +1,4 @@
-# hl7-fhir-translate
+# hl7-fhir-translator
 
 Deterministic HL7v2 ⇄ FHIR R4 translation for Node.js and the browser. A hand-written
 parser and explicit, bidirectional mapping tables compute every field — every output
@@ -32,17 +32,17 @@ Try it without installing anything: [heyitskundan.github.io/hl7-fhir-translator]
 ## Install
 
 ```bash
-npm install hl7-fhir-translate
+npm install hl7-fhir-translator
 ```
 
 Both module systems work out of the box, same API either way:
 
 ```js
 // ESM — Node with "type": "module" in package.json, .mjs files, or any bundler (React/Vite/Next.js)
-import { translateHl7ToFhir } from "hl7-fhir-translate";
+import { translateHl7ToFhir } from "hl7-fhir-translator";
 
 // CommonJS — plain require(), no config needed
-const { translateHl7ToFhir } = require("hl7-fhir-translate");
+const { translateHl7ToFhir } = require("hl7-fhir-translator");
 ```
 
 ## How to use it
@@ -50,7 +50,7 @@ const { translateHl7ToFhir } = require("hl7-fhir-translate");
 ### 1. Translate HL7v2 → FHIR
 
 ```ts
-import { translateHl7ToFhir } from "hl7-fhir-translate";
+import { translateHl7ToFhir } from "hl7-fhir-translator";
 
 const hl7 = [
   "MSH|^~\\&|HIS|HOSP|ADT|HOSP|20240101120000||ADT^A01|MSG001|P|2.5",
@@ -71,7 +71,7 @@ const bundle = JSON.parse(result.translated);
 ### 2. Translate FHIR → HL7v2
 
 ```ts
-import { translateFhirToHl7 } from "hl7-fhir-translate";
+import { translateFhirToHl7 } from "hl7-fhir-translator";
 
 // A bare resource is accepted and auto-wrapped in a Bundle
 const patientJson = JSON.stringify({
@@ -110,7 +110,7 @@ const back = translateFhirToHl7(forward.translated);
 message type or resource kind — synchronously, safe to call on every keystroke in a UI:
 
 ```ts
-import { inspectInput } from "hl7-fhir-translate";
+import { inspectInput } from "hl7-fhir-translator";
 
 inspectInput(hl7Message);
 // { direction: "hl7ToFhir",
@@ -150,7 +150,7 @@ field-by-field detail is in [`docs/MAPPING.md`](../../docs/MAPPING.md).
 ## API reference
 
 Every symbol below is exported from the package root
-(`import { X } from "hl7-fhir-translate"`) — this is the complete list.
+(`import { X } from "hl7-fhir-translator"`) — this is the complete list.
 
 ### Translation
 
@@ -245,7 +245,7 @@ Exported for inspecting a message's structure directly — the translation funct
 are built on exactly these:
 
 ```ts
-import { parseHl7Message, findSegment, getField, getComponent } from "hl7-fhir-translate";
+import { parseHl7Message, findSegment, getField, getComponent } from "hl7-fhir-translator";
 
 const message = parseHl7Message(hl7);
 const pid = findSegment(message, "PID");
@@ -445,15 +445,15 @@ See [Errors](#errors) below for the recommended catch pattern.
 
 ## CLI reference
 
-Installing the package also installs a `hl7-fhir-translate` binary:
+Installing the package also installs a `hl7-fhir-translator` binary:
 
 ```bash
-npx hl7-fhir-translate -i message.hl7                     # -> FHIR JSON on stdout
-npx hl7-fhir-translate -i patient.json -d fhirToHl7        # -> HL7v2 on stdout
-cat message.hl7 | npx hl7-fhir-translate --json            # direction auto-detected; full result incl. mappings/warnings
-npx hl7-fhir-translate -i message.hl7 -o bundle.json        # write to a file instead of stdout
-npx hl7-fhir-translate -i message.hl7 --detect              # print the detected type only
-npx hl7-fhir-translate --help
+npx hl7-fhir-translator -i message.hl7                     # -> FHIR JSON on stdout
+npx hl7-fhir-translator -i patient.json -d fhirToHl7        # -> HL7v2 on stdout
+cat message.hl7 | npx hl7-fhir-translator --json            # direction auto-detected; full result incl. mappings/warnings
+npx hl7-fhir-translator -i message.hl7 -o bundle.json        # write to a file instead of stdout
+npx hl7-fhir-translator -i message.hl7 --detect              # print the detected type only
+npx hl7-fhir-translator --help
 ```
 
 | Flag                | Short | Meaning                                                                                  |
@@ -475,7 +475,7 @@ Both `Hl7ParseError` and `FhirValidationError` extend `Error` and add an optiona
 `context` string (the offending line/segment, when available):
 
 ```ts
-import { translateHl7ToFhir, Hl7ParseError, FhirValidationError } from "hl7-fhir-translate";
+import { translateHl7ToFhir, Hl7ParseError, FhirValidationError } from "hl7-fhir-translator";
 
 try {
   translateHl7ToFhir(input);

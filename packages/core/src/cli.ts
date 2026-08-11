@@ -49,7 +49,7 @@ export function main(argv: string[] = process.argv.slice(2)): void {
   }
 }
 
-// Only runs when this file is executed directly (as the installed `hl7-fhir-translate`
+// Only runs when this file is executed directly (as the installed `hl7-fhir-translator`
 // bin) — guarded so tests can import `main` and call it without triggering process.exit.
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {

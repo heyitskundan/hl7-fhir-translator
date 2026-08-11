@@ -58,12 +58,12 @@ export function formatDetection({ direction, detail }: DetectionResult): string 
   return `fhirToHl7 — FHIR [${detail.resourceTypes.join(", ")}], ${support}`;
 }
 
-/** The text printed by `hl7-fhir-translate --help`. */
-export const HELP_TEXT = `hl7-fhir-translate — deterministic HL7v2 <-> FHIR R4 translation
+/** The text printed by `hl7-fhir-translator --help`. */
+export const HELP_TEXT = `hl7-fhir-translator — deterministic HL7v2 <-> FHIR R4 translation
 
 Usage:
-  hl7-fhir-translate [options]                Read from stdin, write to stdout
-  hl7-fhir-translate -i in.hl7 -o out.json     Read from/write to files
+  hl7-fhir-translator [options]                Read from stdin, write to stdout
+  hl7-fhir-translator -i in.hl7 -o out.json     Read from/write to files
 
 Options:
   -i, --in <file>          Input file (defaults to stdin)
@@ -74,8 +74,8 @@ Options:
   -h, --help                Show this help text
 
 Examples:
-  hl7-fhir-translate -i samples/adt_a01.hl7
-  hl7-fhir-translate -i samples/patient.fhir.json -d fhirToHl7
-  hl7-fhir-translate -i samples/oru_r01.hl7 --detect
-  cat samples/oru_r01.hl7 | hl7-fhir-translate --json
+  hl7-fhir-translator -i samples/adt_a01.hl7
+  hl7-fhir-translator -i samples/patient.fhir.json -d fhirToHl7
+  hl7-fhir-translator -i samples/oru_r01.hl7 --detect
+  cat samples/oru_r01.hl7 | hl7-fhir-translator --json
 `;

@@ -25,6 +25,6 @@ one was thrown.
 
 **Environment**
 
-- `hl7-fhir-translate` version: `npm ls hl7-fhir-translate`
+- `hl7-fhir-translator` version: `npm ls hl7-fhir-translator`
 - Node.js version: `node -v`
 - Library API or CLI?

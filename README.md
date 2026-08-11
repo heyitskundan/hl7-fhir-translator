@@ -1,6 +1,6 @@
 # hl7-fhir-translator
 
-Monorepo for **`hl7-fhir-translate`**, an installable npm package that deterministically
+Monorepo for **`hl7-fhir-translator`**, an installable npm package that deterministically
 translates HL7v2 messages to FHIR R4 (and back) with a field-level mapping trail — plus a
 browser demo of it.
 
@@ -15,7 +15,7 @@ function with zero runtime dependencies — install it and call it, nothing else
 
 | Path                                   | What it is                                                                                                                              |
 | -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| [`packages/core`](./packages/core)     | **The published package.** `npm install hl7-fhir-translate` — library API + CLI. Start here.                                            |
+| [`packages/core`](./packages/core)     | **The published package.** `npm install hl7-fhir-translator` — library API + CLI. Start here.                                           |
 | [`client`](./client)                   | A React/Vite browser demo of the package. Runs entirely client-side — see [`client/README.md`](./client/README.md).                     |
 | [`docs/MAPPING.md`](./docs/MAPPING.md) | Field-by-field mapping reference: every HL7v2 field this package reads/writes and exactly which FHIR path it maps to, per message type. |
 | [`samples/`](./samples)                | Sample HL7v2 messages and a FHIR bundle used by the tests, CLI examples, and demo.                                                      |
@@ -34,11 +34,11 @@ Full field-level detail is in [`docs/MAPPING.md`](./docs/MAPPING.md).
 ## Using the package
 
 ```bash
-npm install hl7-fhir-translate
+npm install hl7-fhir-translator
 ```
 
 ```ts
-import { translateHl7ToFhir, inspectInput } from "hl7-fhir-translate";
+import { translateHl7ToFhir, inspectInput } from "hl7-fhir-translator";
 
 inspectInput(rawHl7Message); // { direction: "hl7ToFhir", detail: { kind: "hl7", messageType: "ADT^A01", ... } }
 
@@ -51,7 +51,7 @@ result.warnings; // anything in the input with no mapping
 Works from `require()` and `import` alike (dual CJS+ESM build), in Node.js and in the
 browser. See [`packages/core/README.md`](./packages/core/README.md) for the full API
 reference (including `inspectInput` — auto-detects not just direction but the specific
-message/resource type), error types, and CLI usage (`npx hl7-fhir-translate -i message.hl7`).
+message/resource type), error types, and CLI usage (`npx hl7-fhir-translator -i message.hl7`).
 
 ## Working on this repo
 

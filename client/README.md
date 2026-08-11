@@ -1,12 +1,12 @@
-# hl7-fhir-translate — browser demo + docs
+# hl7-fhir-translator — browser demo + docs
 
 A demo, not a product — this is the React/Vite/Tailwind UI that shows off the
-[`hl7-fhir-translate`](../packages/core) npm package. Two tabs: **Translator** (paste a
+[`hl7-fhir-translator`](../packages/core) npm package. Two tabs: **Translator** (paste a
 message, translate, inspect the output and its field-level mapping trail) and **Docs**
 (the root README, the package's full API reference, and the field-level mapping spec,
 rendered from the same markdown files that live in the repo — nothing duplicated).
 
-**Everything runs client-side.** This app imports `hl7-fhir-translate` directly and calls
+**Everything runs client-side.** This app imports `hl7-fhir-translator` directly and calls
 it in the browser — there's no backend, no API route, no network request involved in
 translation. That also means it's just static files: `dist/` is a self-contained static
 site, deployable to any static host with zero server-side config.
@@ -36,7 +36,7 @@ at `/` (e.g. `npm run preview`, or any other static host mounted at its own root
 
 ## What this is for
 
-If you just want the translator, install the package: `npm install hl7-fhir-translate` —
+If you just want the translator, install the package: `npm install hl7-fhir-translator` —
 see [`packages/core/README.md`](../packages/core/README.md) for the API. This app exists
 to make the package's behavior visible and easy to try without writing any code, and to
 double as a sanity check that the published API surface is actually pleasant to consume

@@ -9,7 +9,7 @@ include:
   data) HL7v2 message or FHIR JSON, and the direction you translated it with.
 - **What you expected** vs. **what you got** — the actual `translated`/`mappings`/
   `warnings` output, or the exact error message and `.context` if one was thrown.
-- **How you're running it** — package version (`npm ls hl7-fhir-translate`), Node.js
+- **How you're running it** — package version (`npm ls hl7-fhir-translator`), Node.js
   version, and whether you're using the library API or the CLI.
 
 If the bug is a mapping that looks wrong for a field this package already claims to

@@ -109,7 +109,7 @@ describe("main (CLI entrypoint)", () => {
   let stderrSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    dir = mkdtempSync(join(tmpdir(), "hl7-fhir-translate-cli-test-"));
+    dir = mkdtempSync(join(tmpdir(), "hl7-fhir-translator-cli-test-"));
     stdout = [];
     stderr = [];
     stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
@@ -130,7 +130,7 @@ describe("main (CLI entrypoint)", () => {
 
   it("prints the help text and exits without reading any input", () => {
     main(["--help"]);
-    expect(stdout.join("")).toContain("hl7-fhir-translate — deterministic HL7v2 <-> FHIR R4 translation");
+    expect(stdout.join("")).toContain("hl7-fhir-translator — deterministic HL7v2 <-> FHIR R4 translation");
   });
 
   it("reads a file with -i and writes the translated Bundle to stdout", () => {

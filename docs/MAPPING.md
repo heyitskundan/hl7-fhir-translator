@@ -1,6 +1,6 @@
 # HL7v2 ⇄ FHIR R4 Mapping Reference
 
-This is the field-level specification for what [`hl7-fhir-translate`](../packages/core)
+This is the field-level specification for what [`hl7-fhir-translator`](../packages/core)
 actually maps — every HL7v2 field it reads or writes, and exactly which FHIR R4 path it
 corresponds to. It exists so a reviewer can audit correctness without reading the
 implementation, and so a contributor extending the package has a single source of truth
@@ -345,7 +345,7 @@ an ORU with no results is treated as malformed input, not a valid empty translat
 Input (`samples/oru_r01.hl7`) has two `OBX` results (Hemoglobin, Hematocrit); output is a
 4-entry Bundle: `Patient`, `DiagnosticReport` (referencing both), and two `Observation`
 resources. Full input/output pair is in [`samples/oru_r01.hl7`](../samples/oru_r01.hl7) —
-translate it yourself with `npx hl7-fhir-translate -i samples/oru_r01.hl7` to see the
+translate it yourself with `npx hl7-fhir-translator -i samples/oru_r01.hl7` to see the
 complete JSON; abbreviated, the first Observation is:
 
 ```json

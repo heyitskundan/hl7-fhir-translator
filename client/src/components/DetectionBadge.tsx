@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { inspectInput } from "hl7-fhir-translate";
+import { inspectInput } from "hl7-fhir-translator";
 import type { Direction } from "../types.js";
 
 interface Props {

@@ -1,5 +1,5 @@
 {
-  "name": "hl7-fhir-translate",
+  "name": "hl7-fhir-translator",
   "version": "0.1.0",
   "description": "Deterministic HL7v2 <-> FHIR R4 translator (ADT, ORU, ORM) with a field-level mapping trail and a CLI.",
   "keywords": [
@@ -41,7 +41,7 @@
     }
   },
   "bin": {
-    "hl7-fhir-translate": "./dist/cli.js"
+    "hl7-fhir-translator": "./dist/cli.js"
   },
   "files": [
     "dist",

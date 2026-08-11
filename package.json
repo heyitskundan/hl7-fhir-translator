@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Monorepo for hl7-fhir-translate (the published npm package) and its browser demo",
+  "description": "Monorepo for hl7-fhir-translator (the published npm package) and its browser demo",
   "license": "MIT",
   "workspaces": [
     "packages/core",
