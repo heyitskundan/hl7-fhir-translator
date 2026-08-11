@@ -53,7 +53,7 @@ samples/         sample HL7v2 messages + a FHIR bundle, shared by tests/CLI/demo
 
 ## Making a pull request
 
-1. Fork the repo and branch from `master`.
+1. Fork the repo and branch from `main`.
 2. Match the existing pattern: each message type is one file in
    `packages/core/src/mapping/` (`adt.ts`, `oru.ts`, `orm.ts`) with an explicit,
    bidirectional field table — no inference or guessing, every field traceable in

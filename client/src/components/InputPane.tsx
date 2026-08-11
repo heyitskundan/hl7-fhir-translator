@@ -1,54 +1,59 @@
+import { useMemo, useRef } from "react";
+import { highlightHl7 } from "../hl7-highlight.js";
+import { highlightJson } from "../json-highlight.js";
 import type { Direction } from "../types.js";
 import { DetectionBadge } from "./DetectionBadge.js";
-import { DirectionToggle } from "./DirectionToggle.js";
-import { SampleMessages } from "./SampleMessages.js";
 
 interface Props {
   value: string;
   onChange: (value: string) => void;
   direction: Direction;
   onDirectionChange: (direction: Direction) => void;
-  onSampleSelect: (index: number) => void;
   onTranslate: () => void;
 }
 
-export function InputPane({ value, onChange, direction, onDirectionChange, onSampleSelect, onTranslate }: Props) {
+export function InputPane({ value, onChange, direction, onDirectionChange, onTranslate }: Props) {
+  const highlightRef = useRef<HTMLPreElement>(null);
+  // A native <textarea> can't color individual characters, so the visible text renders in a
+  // highlighted <pre> underneath; the textarea sits on top with transparent text (but a real,
+  // visible caret) so typing/selection/scrolling stay fully native — the classic
+  // highlighted-textarea overlay technique.
+  const highlighted = useMemo(() => (direction === "hl7ToFhir" ? highlightHl7(value) : highlightJson(value)), [value, direction]);
+
   return (
-    <div className="flex h-full flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <DirectionToggle direction={direction} onChange={onDirectionChange} />
-        <SampleMessages onSelect={onSampleSelect} />
+    <div className="flex h-full flex-col gap-3 p-4 sm:p-6 lg:p-8">
+      {/* Matches OutputPane's tab-bar row exactly (h-10, border-b) so both content boxes below start at the same y, not just end up the same height. */}
+      <div className="flex h-10 shrink-0 items-center border-b border-surface-800">
+        <DetectionBadge value={value} direction={direction} onSwitchDirection={onDirectionChange} />
       </div>
 
-      <textarea
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => {
-          if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
-            e.preventDefault();
-            onTranslate();
-          }
-        }}
-        spellCheck={false}
-        placeholder={direction === "hl7ToFhir" ? "Paste a raw HL7v2 message…" : "Paste a FHIR R4 resource or Bundle (JSON)…"}
-        className="min-h-[320px] flex-1 resize-none rounded-lg border border-surface-700 bg-surface-900 p-4 font-mono text-sm leading-relaxed text-slate-200 outline-none placeholder:text-slate-600 focus:border-accent-500"
-      />
-
-      <DetectionBadge value={value} direction={direction} onSwitchDirection={onDirectionChange} />
-
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-slate-500">
-          Nothing typed here ever leaves your browser — but paste synthetic or de-identified messages only.
-        </p>
-        <button
-          type="button"
-          onClick={onTranslate}
-          disabled={value.trim() === ""}
-          className="flex items-center gap-2 rounded-lg bg-accent-600 px-4 py-2 text-sm font-semibold text-surface-950 transition-colors hover:bg-accent-500 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          Translate
-          <kbd className="rounded border border-surface-950/30 bg-surface-950/20 px-1.5 py-0.5 text-[10px] font-normal opacity-70">⌘⏎</kbd>
-        </button>
+      <div className="relative min-h-0 flex-1">
+        <pre
+          ref={highlightRef}
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 overflow-auto rounded-lg border border-transparent bg-[#282a36] p-4 font-mono text-base leading-relaxed whitespace-pre-wrap break-words text-[#f8f8f2]"
+          dangerouslySetInnerHTML={{ __html: highlighted }}
+        />
+        <textarea
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onScroll={(e) => {
+            const pre = highlightRef.current;
+            if (pre) {
+              pre.scrollTop = e.currentTarget.scrollTop;
+              pre.scrollLeft = e.currentTarget.scrollLeft;
+            }
+          }}
+          onKeyDown={(e) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+              e.preventDefault();
+              onTranslate();
+            }
+          }}
+          spellCheck={false}
+          placeholder={direction === "hl7ToFhir" ? "Paste a raw HL7v2 message…" : "Paste a FHIR R4 resource or Bundle (JSON)…"}
+          className="absolute inset-0 resize-none rounded-lg border border-surface-700 bg-transparent p-4 font-mono text-sm leading-relaxed whitespace-pre-wrap break-words text-transparent caret-slate-200 outline-none placeholder:text-slate-600 focus:border-accent-500"
+        />
       </div>
     </div>
   );

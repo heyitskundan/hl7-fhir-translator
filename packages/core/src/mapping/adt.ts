@@ -103,6 +103,7 @@ export function buildPidFieldsFromPatient(patient: Patient, trail: MappingTrail)
   return pidFields;
 }
 
+/** ADT^A01/A08 -> a Bundle with a Patient and, if PV1 is present, an Encounter. Throws `FhirValidationError` when PID is missing. */
 export function adtToFhir(message: Hl7Message): { bundle: Bundle; trail: MappingTrail } {
   const trail = new MappingTrail();
   const pid = findSegment(message, "PID");
@@ -168,6 +169,7 @@ export function adtToFhir(message: Hl7Message): { bundle: Bundle; trail: Mapping
   return { bundle, trail };
 }
 
+/** Patient(+Encounter) -> an ADT message using `messageTypeTrigger` (e.g. "A01") as MSH-9's trigger. PV1 is omitted, with a warning, when no Encounter is present. Throws `FhirValidationError` when the bundle has no Patient. */
 export function fhirToAdt(bundle: Bundle, messageTypeTrigger: string): { message: Hl7Message; trail: MappingTrail } {
   const trail = new MappingTrail();
   const patient = bundle.entry.find((e): e is { resource: Patient; fullUrl?: string } => e.resource.resourceType === "Patient")?.resource;

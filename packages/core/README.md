@@ -5,6 +5,8 @@ parser and explicit, bidirectional mapping tables compute every field — every 
 value traces back to a specific HL7v2 field or FHIR path through a testable mapping
 table, and translation is a pure function of the string you pass in.
 
+Try it without installing anything: [heyitskundan.github.io/hl7-fhir-translator](https://heyitskundan.github.io/hl7-fhir-translator/).
+
 ## Contents
 
 - [Requirements](#requirements)

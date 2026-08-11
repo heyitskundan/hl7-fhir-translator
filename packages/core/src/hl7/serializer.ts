@@ -28,6 +28,7 @@ export function field(...components: (string | undefined)[]): Hl7Field {
   return { raw: values.join("^"), reps: [values] };
 }
 
+/** A blank field, used by `segment` to fill any index between 1 and the highest field passed in that wasn't explicitly given a value. */
 export function emptyField(): Hl7Field {
   return { raw: "", reps: [[""]] };
 }

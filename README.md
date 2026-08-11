@@ -9,6 +9,8 @@ tables: same input always produces the same output, every output value traces ba
 specific HL7v2 field or FHIR path, and the whole thing is unit-tested. It's a pure
 function with zero runtime dependencies — install it and call it, nothing else happens.
 
+**Live demo + docs:** [heyitskundan.github.io/hl7-fhir-translator](https://heyitskundan.github.io/hl7-fhir-translator/)
+
 ## Packages
 
 | Path                                   | What it is                                                                                                                              |

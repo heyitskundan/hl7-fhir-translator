@@ -94,9 +94,29 @@ to `ATND` (attending) since that's the only doctor field mapped.
 
 ### 4.2 Reverse: FHIR → HL7v2
 
-The same table applies in reverse for every row above. Fields with no FHIR-side value are
-omitted from the output field entirely (HL7v2 trailing/embedded empty fields), never
-padded with placeholder text. Additional synthesized fields, since FHIR has no equivalent:
+| FHIR path                                     | HL7v2 field           | Notes                                                                                                  |
+| --------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------ |
+| `Patient.identifier[0].value`                 | `PID-3.1`             |                                                                                                        |
+| `Patient.identifier[0].assigner.display`      | `PID-3.4`             |                                                                                                        |
+| `Patient.identifier[0].type.coding[0].code`   | `PID-3.5`             | Defaults to `MR` if absent                                                                             |
+| `Patient.name[0].family`                      | `PID-5.1`             |                                                                                                        |
+| `Patient.name[0].given[0]`                    | `PID-5.2`             |                                                                                                        |
+| `Patient.name[0].given[1]`                    | `PID-5.3`             | Written back as the middle name component                                                              |
+| `Patient.birthDate`                           | `PID-7`               | `YYYY-MM-DD` → `YYYYMMDD`                                                                              |
+| `Patient.gender`                              | `PID-8`               | `male`→`M`, `female`→`F`, `other`→`O`, anything else→`U`                                               |
+| `Patient.address[0].line[0]`                  | `PID-11.1`            |                                                                                                        |
+| `Patient.address[0].city`                     | `PID-11.3`            |                                                                                                        |
+| `Patient.address[0].state`                    | `PID-11.4`            |                                                                                                        |
+| `Patient.address[0].postalCode`               | `PID-11.5`            |                                                                                                        |
+| `Patient.address[0].country`                  | `PID-11.6`            |                                                                                                        |
+| `Encounter.class`                             | `PV1-2`               | Inverse of the forward table: `IMP`→`I`, `AMB`→`O`, `EMER`→`E`, else `I`                               |
+| `Encounter.location[0].location.display`      | `PV1-3.1`             |                                                                                                        |
+| `Encounter.participant[0].individual.display` | `PV1-7.2` / `PV1-7.3` | Split on the first space: everything after it → `PV1-7.2` (family), the first word → `PV1-7.3` (given) |
+| `Encounter.period.start`                      | `EVN-2`               | Falls back to the current UTC timestamp if absent                                                      |
+
+A field with no FHIR-side value is omitted from the output entirely (HL7v2
+trailing/embedded empty fields), never padded with placeholder text. Additional
+synthesized fields, since FHIR has no equivalent:
 
 | HL7v2 field         | Value                                                       | Notes                                                                                                                          |
 | ------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
@@ -120,7 +140,7 @@ warned about and skipped.
 
 Input (`samples/adt_a01.hl7`):
 
-```
+```hl7
 MSH|^~\&|HIS|HOSP|ADT|HOSP|20240101120000||ADT^A01|MSG001|P|2.5
 EVN|A01|20240101120000
 PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M|||123 Main St^^Springfield^IL^62701^USA
@@ -230,7 +250,23 @@ Output (`translateHl7ToFhir` — the complete Bundle, both entries):
 
 ### 5.1 Forward: HL7v2 → FHIR
 
-PID mapping is identical to §4.1. Panel- and result-level fields:
+| HL7v2 field | FHIR path                                   | Notes                                                          |
+| ----------- | ------------------------------------------- | -------------------------------------------------------------- |
+| `PID-3.1`   | `Patient.identifier[0].value`               | Medical record number                                          |
+| `PID-3.4`   | `Patient.identifier[0].assigner.display`    | Assigning authority                                            |
+| `PID-3.5`   | `Patient.identifier[0].type.coding[0].code` | Defaults to `MR` if absent                                     |
+| `PID-5.1`   | `Patient.name[0].family`                    |                                                                |
+| `PID-5.2`   | `Patient.name[0].given[0]`                  |                                                                |
+| `PID-5.3`   | `Patient.name[0].given[1]`                  | Middle name, appended to `given[]`                             |
+| `PID-7`     | `Patient.birthDate`                         | `YYYYMMDD` → `YYYY-MM-DD`                                      |
+| `PID-8`     | `Patient.gender`                            | `M`→`male`, `F`→`female`, `O`→`other`, anything else→`unknown` |
+| `PID-11.1`  | `Patient.address[0].line[0]`                | Street address                                                 |
+| `PID-11.3`  | `Patient.address[0].city`                   |                                                                |
+| `PID-11.4`  | `Patient.address[0].state`                  |                                                                |
+| `PID-11.5`  | `Patient.address[0].postalCode`             |                                                                |
+| `PID-11.6`  | `Patient.address[0].country`                |                                                                |
+
+Panel- and result-level fields:
 
 | HL7v2 field       | FHIR path                                                                        | Notes                                                                                                                                               |
 | ----------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -253,11 +289,50 @@ produced from the message, in `OBX` order.
 
 ### 5.2 Reverse: FHIR → HL7v2
 
-Symmetrical to §5.1: `DiagnosticReport.code` → `OBR-4` (LOINC system component hardcoded
-to `LN` on the way out), `effectiveDateTime` → `OBR-7`; each `Observation` becomes one
-`OBX` segment, numbered sequentially from 1 regardless of the source `Observation.id`.
-`OBX-11` (result status) is always written as `F` (final). MSH/PID synthesis follows the
-same rules as §4.2, with `MSH-9` fixed to `ORU^R01`.
+| FHIR path                                   | HL7v2 field | Notes                                                    |
+| ------------------------------------------- | ----------- | -------------------------------------------------------- |
+| `Patient.identifier[0].value`               | `PID-3.1`   |                                                          |
+| `Patient.identifier[0].assigner.display`    | `PID-3.4`   |                                                          |
+| `Patient.identifier[0].type.coding[0].code` | `PID-3.5`   | Defaults to `MR` if absent                               |
+| `Patient.name[0].family`                    | `PID-5.1`   |                                                          |
+| `Patient.name[0].given[0]`                  | `PID-5.2`   |                                                          |
+| `Patient.name[0].given[1]`                  | `PID-5.3`   | Written back as the middle name component                |
+| `Patient.birthDate`                         | `PID-7`     | `YYYY-MM-DD` → `YYYYMMDD`                                |
+| `Patient.gender`                            | `PID-8`     | `male`→`M`, `female`→`F`, `other`→`O`, anything else→`U` |
+| `Patient.address[0].line[0]`                | `PID-11.1`  |                                                          |
+| `Patient.address[0].city`                   | `PID-11.3`  |                                                          |
+| `Patient.address[0].state`                  | `PID-11.4`  |                                                          |
+| `Patient.address[0].postalCode`             | `PID-11.5`  |                                                          |
+| `Patient.address[0].country`                | `PID-11.6`  |                                                          |
+
+Panel- and result-level fields:
+
+| FHIR path                                         | HL7v2 field | Notes                                                                                            |
+| ------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------ |
+| `DiagnosticReport.code.coding[0].code`            | `OBR-4.1`   | System component is hardcoded to `LN` on the way out (LOINC)                                     |
+| `DiagnosticReport.code.coding[0].display`         | `OBR-4.2`   |                                                                                                  |
+| `DiagnosticReport.effectiveDateTime`              | `OBR-7`     |                                                                                                  |
+| _(loop index)_                                    | `OBX-1`     | Written sequentially from 1 for each `Observation`, regardless of the source `Observation.id`    |
+| `Observation[i].code.coding[0].code`              | `OBX-3.1`   | System component hardcoded to `LN`                                                               |
+| `Observation[i].code.coding[0].display`           | `OBX-3.2`   |                                                                                                  |
+| `Observation[i].valueQuantity.value`              | `OBX-5`     | Also sets `OBX-2` to `NM`                                                                        |
+| `Observation[i].valueQuantity.unit`               | `OBX-6`     | Only written alongside `valueQuantity`                                                           |
+| `Observation[i].valueString`                      | `OBX-5`     | Used only when `valueQuantity` is absent; sets `OBX-2` to `ST` instead                           |
+| `Observation[i].referenceRange[0]`                | `OBX-7`     | Written back as `"low-high"`, e.g. `{ low: {value: 13.5}, high: {value: 17.5} }` → `"13.5-17.5"` |
+| `Observation[i].interpretation[0].coding[0].code` | `OBX-8`     |                                                                                                  |
+| `Observation[i].effectiveDateTime`                | `OBX-14`    |                                                                                                  |
+| _(constant)_                                      | `OBX-11`    | Always written as `F` (final) — this package doesn't track any other result status               |
+
+`MSH` carries no FHIR-side source — every field is synthesized:
+
+| HL7v2 field         | Value                                            | Notes                                            |
+| ------------------- | ------------------------------------------------ | ------------------------------------------------ |
+| `MSH-2`             | `^~\&`                                           | Standard encoding characters                     |
+| `MSH-3`–`MSH-6`     | `FHIR-TRANSLATOR` / `HL7FHIR` / `HIS` / `HOSP`   | Synthetic sending/receiving application+facility |
+| `MSH-7`             | Current UTC timestamp                            | Message creation time                            |
+| `MSH-9`             | `ORU^R01`                                        |                                                  |
+| `MSH-10`            | Generated control ID (`TRX<timestamp><counter>`) |                                                  |
+| `MSH-11` / `MSH-12` | `P` / `2.5`                                      | Processing ID, version ID                        |
 
 ### 5.3 Not mapped
 
@@ -329,7 +404,23 @@ complete JSON; abbreviated, the first Observation is:
 
 ### 6.1 Forward: HL7v2 → FHIR
 
-PID mapping is identical to §4.1.
+| HL7v2 field | FHIR path                                   | Notes                                                          |
+| ----------- | ------------------------------------------- | -------------------------------------------------------------- |
+| `PID-3.1`   | `Patient.identifier[0].value`               | Medical record number                                          |
+| `PID-3.4`   | `Patient.identifier[0].assigner.display`    | Assigning authority                                            |
+| `PID-3.5`   | `Patient.identifier[0].type.coding[0].code` | Defaults to `MR` if absent                                     |
+| `PID-5.1`   | `Patient.name[0].family`                    |                                                                |
+| `PID-5.2`   | `Patient.name[0].given[0]`                  |                                                                |
+| `PID-5.3`   | `Patient.name[0].given[1]`                  | Middle name, appended to `given[]`                             |
+| `PID-7`     | `Patient.birthDate`                         | `YYYYMMDD` → `YYYY-MM-DD`                                      |
+| `PID-8`     | `Patient.gender`                            | `M`→`male`, `F`→`female`, `O`→`other`, anything else→`unknown` |
+| `PID-11.1`  | `Patient.address[0].line[0]`                | Street address                                                 |
+| `PID-11.3`  | `Patient.address[0].city`                   |                                                                |
+| `PID-11.4`  | `Patient.address[0].state`                  |                                                                |
+| `PID-11.5`  | `Patient.address[0].postalCode`             |                                                                |
+| `PID-11.6`  | `Patient.address[0].country`                |                                                                |
+
+Order fields:
 
 | HL7v2 field             | FHIR path                                           | Notes                                                                                    |
 | ----------------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------- |
@@ -344,11 +435,44 @@ PID mapping is identical to §4.1.
 
 ### 6.2 Reverse: FHIR → HL7v2
 
-Symmetrical to §6.1. `ServiceRequest.status` → `ORC-1` via the inverse of the table above
-(`active`→`NW`, `revoked`→`CA`, `completed`→`CM`, else `NW`). A placer order number is
-synthesized (`ORD<last 6 digits of the generated control ID>`) and written to both
-`ORC-2` and `OBR-2` so the two segments stay linked, matching how the forward direction
-expects them. `MSH-9` is fixed to `ORM^O01`.
+| FHIR path                                   | HL7v2 field | Notes                                                    |
+| ------------------------------------------- | ----------- | -------------------------------------------------------- |
+| `Patient.identifier[0].value`               | `PID-3.1`   |                                                          |
+| `Patient.identifier[0].assigner.display`    | `PID-3.4`   |                                                          |
+| `Patient.identifier[0].type.coding[0].code` | `PID-3.5`   | Defaults to `MR` if absent                               |
+| `Patient.name[0].family`                    | `PID-5.1`   |                                                          |
+| `Patient.name[0].given[0]`                  | `PID-5.2`   |                                                          |
+| `Patient.name[0].given[1]`                  | `PID-5.3`   | Written back as the middle name component                |
+| `Patient.birthDate`                         | `PID-7`     | `YYYY-MM-DD` → `YYYYMMDD`                                |
+| `Patient.gender`                            | `PID-8`     | `male`→`M`, `female`→`F`, `other`→`O`, anything else→`U` |
+| `Patient.address[0].line[0]`                | `PID-11.1`  |                                                          |
+| `Patient.address[0].city`                   | `PID-11.3`  |                                                          |
+| `Patient.address[0].state`                  | `PID-11.4`  |                                                          |
+| `Patient.address[0].postalCode`             | `PID-11.5`  |                                                          |
+| `Patient.address[0].country`                | `PID-11.6`  |                                                          |
+
+Order fields:
+
+| FHIR path                               | HL7v2 field             | Notes                                                                                                                                                                              |
+| --------------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ServiceRequest.status`                 | `ORC-1`                 | Inverse of the forward table: `active`→`NW`, `revoked`→`CA`, `completed`→`CM`, else `NW`                                                                                           |
+| `ServiceRequest.authoredOn`             | `ORC-9`                 |                                                                                                                                                                                    |
+| `ServiceRequest.requester.display`      | `ORC-12.2` / `ORC-12.3` | Split on the first space: everything after it → `ORC-12.2` (family), the first word → `ORC-12.3` (given)                                                                           |
+| `ServiceRequest.code.coding[0].code`    | `OBR-4.1`               | System component hardcoded to `LN` on the way out                                                                                                                                  |
+| `ServiceRequest.code.coding[0].display` | `OBR-4.2`               |                                                                                                                                                                                    |
+| `ServiceRequest.occurrenceDateTime`     | `OBR-7`                 |                                                                                                                                                                                    |
+| _(constant)_                            | `ORC-2` and `OBR-2`     | A placer order number is synthesized (`ORD<last 6 digits of the generated control ID>`) and written to both, so the two segments stay linked the way the forward direction expects |
+
+`MSH` carries no FHIR-side source — every field is synthesized:
+
+| HL7v2 field         | Value                                            | Notes                                            |
+| ------------------- | ------------------------------------------------ | ------------------------------------------------ |
+| `MSH-2`             | `^~\&`                                           | Standard encoding characters                     |
+| `MSH-3`–`MSH-6`     | `FHIR-TRANSLATOR` / `HL7FHIR` / `HIS` / `HOSP`   | Synthetic sending/receiving application+facility |
+| `MSH-7`             | Current UTC timestamp                            | Message creation time                            |
+| `MSH-9`             | `ORM^O01`                                        |                                                  |
+| `MSH-10`            | Generated control ID (`TRX<timestamp><counter>`) |                                                  |
+| `MSH-11` / `MSH-12` | `P` / `2.5`                                      | Processing ID, version ID                        |
 
 ### 6.3 Not mapped
 
@@ -433,13 +557,14 @@ Once direction is `hl7ToFhir`, `inspectInput` attempts a full `parseHl7Message` 
 parser translation uses):
 
 - **Parse succeeds** → reads `MSH-9`, splits it into `category^trigger` (e.g. `ADT`/`A01`),
-  and checks the pair against `SUPPORTED_MESSAGE_TYPES` (§4-6 above). Result:
+  and checks the pair against `SUPPORTED_MESSAGE_TYPES` (the ADT/ORU/ORM message types
+  above). Result:
   `{ kind: "hl7", messageType, category, trigger, supported, description }` —
   `description` is only present when `supported` is `true`.
 - **Parse fails** (bad/missing MSH delimiters, empty message — anything that would throw
   `Hl7ParseError` from `translateHl7ToFhir`) → `{ kind: "unknown", reason }` with the
   parser's own error message as `reason`. Direction is still reported as `"hl7ToFhir"`
-  since the shape check in §8.1 already committed to that; only the _specific type_ is
+  since the direction check above already committed to that; only the _specific type_ is
   unknown.
 
 Note that `supported: false` is a valid, non-error result — it means "this parses as a

@@ -1,5 +1,6 @@
 import type { Mapping } from "../types.js";
 
+/** Canonical HL7 Terminology / LOINC system URLs used across every mapper's coded fields. */
 export const CODE_SYSTEMS = {
   identifierType: "http://terminology.hl7.org/CodeSystem/v2-0203",
   loinc: "http://loinc.org",
@@ -13,11 +14,13 @@ export class MappingTrail {
   readonly mappings: Mapping[] = [];
   readonly warnings: string[] = [];
 
+  /** Records one field-level mapping; silently skipped when `value` is empty so the trail only ever cites fields that actually produced output. */
   add(source: string, target: string, value: string, note?: string): void {
     if (value === "" || value === undefined) return;
     this.mappings.push(note !== undefined ? { source, target, value, note } : { source, target, value });
   }
 
+  /** Records an input segment/field or output resource that had no mapping and was skipped. */
   warn(message: string): void {
     this.warnings.push(message);
   }
@@ -31,11 +34,13 @@ const GENDER_HL7_TO_FHIR: Record<string, "male" | "female" | "other" | "unknown"
 };
 const GENDER_FHIR_TO_HL7: Record<string, string> = { male: "M", female: "F", other: "O", unknown: "U" };
 
+/** HL7 Table 0001 (Administrative Sex) -> FHIR AdministrativeGender. Unrecognized or missing codes fall back to "unknown". */
 export function hl7GenderToFhir(code: string | undefined): "male" | "female" | "other" | "unknown" {
   if (!code) return "unknown";
   return GENDER_HL7_TO_FHIR[code.toUpperCase()] ?? "unknown";
 }
 
+/** FHIR AdministrativeGender -> HL7 Table 0001. Unrecognized or missing values fall back to "U". */
 export function fhirGenderToHl7(gender: string | undefined): string {
   if (!gender) return "U";
   return GENDER_FHIR_TO_HL7[gender] ?? "U";
@@ -48,11 +53,13 @@ const PATIENT_CLASS_HL7_TO_FHIR: Record<string, { code: string; display: string 
 };
 const PATIENT_CLASS_FHIR_TO_HL7: Record<string, string> = { IMP: "I", AMB: "O", EMER: "E" };
 
+/** HL7 Table 0004 (Patient Class, PV1-2) -> a v3-ActCode `Encounter.class` code+display. Unrecognized or missing codes fall back to "UNK". */
 export function hl7PatientClassToFhir(code: string | undefined): { code: string; display: string } {
   if (!code) return { code: "UNK", display: "unknown" };
   return PATIENT_CLASS_HL7_TO_FHIR[code.toUpperCase()] ?? { code: "UNK", display: "unknown" };
 }
 
+/** v3-ActCode `Encounter.class` code -> HL7 Table 0004 (Patient Class). Unrecognized or missing codes fall back to "I" (inpatient). */
 export function fhirEncounterClassToHl7(code: string | undefined): string {
   if (!code) return "I";
   return PATIENT_CLASS_FHIR_TO_HL7[code] ?? "I";
@@ -78,17 +85,20 @@ export function fhirDateTimeToHl7(value: string | undefined): string | undefined
   return `${y}${mo}${d}${h}${mi}${s ?? "00"}`;
 }
 
+/** Combines an XPN given (PID-5.2) and middle (PID-5.3) name component into FHIR's `HumanName.given[]`; returns undefined rather than an empty array when both are absent. */
 export function hl7NameToFhirGiven(given: string | undefined, middle: string | undefined): string[] | undefined {
   const parts = [given, middle].filter((p): p is string => !!p);
   return parts.length > 0 ? parts : undefined;
 }
 
 let controlIdCounter = 0;
+/** A unique MSH-10 message control ID for a synthesized HL7v2 message, monotonically incrementing within the process so two messages built in the same millisecond still differ. */
 export function nextMessageControlId(): string {
   controlIdCounter += 1;
   return `TRX${Date.now()}${controlIdCounter}`;
 }
 
+/** The current UTC time as an HL7 DTM (YYYYMMDDHHmmss), for synthesizing MSH-7/EVN-2 when the FHIR source has no corresponding timestamp. */
 export function nowHl7DateTime(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");

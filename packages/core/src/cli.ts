@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync, writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
+import { pathToFileURL } from "node:url";
 import { formatDetection, HELP_TEXT, runTranslation } from "./cli-core.js";
 import { inspectInput } from "./inspect.js";
 
@@ -9,8 +10,10 @@ function readInput(inPath: string | undefined): string {
   return readFileSync(fd, "utf8");
 }
 
-function main(): void {
+/** The CLI entrypoint's argument parsing and I/O, split out from the top-level script run below so tests can call it directly with an explicit argv. */
+export function main(argv: string[] = process.argv.slice(2)): void {
   const { values } = parseArgs({
+    args: argv,
     options: {
       in: { type: "string", short: "i" },
       out: { type: "string", short: "o" },
@@ -46,9 +49,13 @@ function main(): void {
   }
 }
 
-try {
-  main();
-} catch (error) {
-  process.stderr.write(`error: ${error instanceof Error ? error.message : String(error)}\n`);
-  process.exit(1);
+// Only runs when this file is executed directly (as the installed `hl7-fhir-translate`
+// bin) — guarded so tests can import `main` and call it without triggering process.exit.
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try {
+    main();
+  } catch (error) {
+    process.stderr.write(`error: ${error instanceof Error ? error.message : String(error)}\n`);
+    process.exit(1);
+  }
 }

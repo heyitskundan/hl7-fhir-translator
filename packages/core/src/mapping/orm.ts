@@ -15,6 +15,7 @@ const ORDER_CONTROL_TO_STATUS: Record<string, ServiceRequest["status"]> = {
 };
 const STATUS_TO_ORDER_CONTROL: Record<string, string> = { active: "NW", revoked: "CA", completed: "CM" };
 
+/** ORM^O01 -> a Bundle with a Patient and a ServiceRequest. The ordering provider is read from ORC-12, falling back to OBR-16 when ORC-12 is absent. Throws `FhirValidationError` when PID or OBR is missing. */
 export function ormToFhir(message: Hl7Message): { bundle: Bundle; trail: MappingTrail } {
   const trail = new MappingTrail();
   const pid = findSegment(message, "PID");
@@ -73,6 +74,7 @@ export function ormToFhir(message: Hl7Message): { bundle: Bundle; trail: Mapping
   return { bundle, trail };
 }
 
+/** ServiceRequest -> an ORM^O01 message; a placer order number is synthesized and written to both ORC-2 and OBR-2 to keep the two segments linked. Throws `FhirValidationError` when the bundle has no Patient or no ServiceRequest. */
 export function fhirToOrm(bundle: Bundle): { message: Hl7Message; trail: MappingTrail } {
   const trail = new MappingTrail();
   const patient = bundle.entry.find((e) => e.resource.resourceType === "Patient")?.resource as Patient | undefined;

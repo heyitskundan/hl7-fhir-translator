@@ -1,5 +1,9 @@
-import { describe, expect, it } from "vitest";
-import { detectDirection, resolveDirection, runTranslation } from "../src/cli-core.js";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { detectDirection, formatDetection, resolveDirection, runTranslation } from "../src/cli-core.js";
+import { main } from "../src/cli.js";
 
 const ADT_A01 = [
   "MSH|^~\\&|HIS|HOSP|ADT|HOSP|20240101120000||ADT^A01|MSG001|P|2.5",
@@ -58,5 +62,117 @@ describe("runTranslation", () => {
   it("respects an explicit --direction override", () => {
     const { result } = runTranslation(ADT_A01, { direction: "hl7ToFhir" });
     expect(result.warnings).toEqual([]);
+  });
+});
+
+describe("formatDetection", () => {
+  it("renders a supported HL7v2 detection with its description", () => {
+    const line = formatDetection({
+      direction: "hl7ToFhir",
+      detail: { kind: "hl7", messageType: "ADT^A01", category: "ADT", trigger: "A01", supported: true, description: "Patient admission" },
+    });
+    expect(line).toBe("hl7ToFhir — HL7v2 ADT^A01 (Patient admission), supported");
+  });
+
+  it("renders an unsupported HL7v2 trigger without a description", () => {
+    const line = formatDetection({
+      direction: "hl7ToFhir",
+      detail: { kind: "hl7", messageType: "ADT^A03", category: "ADT", trigger: "A03", supported: false },
+    });
+    expect(line).toBe("hl7ToFhir — HL7v2 ADT^A03, NOT supported");
+  });
+
+  it("renders a supported FHIR detection with its target message type", () => {
+    const line = formatDetection({
+      direction: "fhirToHl7",
+      detail: { kind: "fhir", resourceTypes: ["Patient", "Encounter"], targetMessageType: "ADT^A01", supported: true },
+    });
+    expect(line).toBe("fhirToHl7 — FHIR [Patient, Encounter], supported, would produce ADT^A01");
+  });
+
+  it("renders an unsupported FHIR resource type", () => {
+    const line = formatDetection({ direction: "fhirToHl7", detail: { kind: "fhir", resourceTypes: ["Practitioner"], supported: false } });
+    expect(line).toBe("fhirToHl7 — FHIR [Practitioner], NOT supported");
+  });
+
+  it("renders an unknown-shape result with its reason", () => {
+    const line = formatDetection({ direction: "unknown", detail: { kind: "unknown", reason: "Input doesn't start with MSH or {" } });
+    expect(line).toBe("unknown (direction: unknown) — Input doesn't start with MSH or {");
+  });
+});
+
+describe("main (CLI entrypoint)", () => {
+  let dir: string;
+  let stdout: string[];
+  let stderr: string[];
+  let stdoutSpy: ReturnType<typeof vi.spyOn>;
+  let stderrSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "hl7-fhir-translate-cli-test-"));
+    stdout = [];
+    stderr = [];
+    stdoutSpy = vi.spyOn(process.stdout, "write").mockImplementation((chunk) => {
+      stdout.push(chunk.toString());
+      return true;
+    });
+    stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+      stderr.push(chunk.toString());
+      return true;
+    });
+  });
+
+  afterEach(() => {
+    stdoutSpy.mockRestore();
+    stderrSpy.mockRestore();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it("prints the help text and exits without reading any input", () => {
+    main(["--help"]);
+    expect(stdout.join("")).toContain("hl7-fhir-translate — deterministic HL7v2 <-> FHIR R4 translation");
+  });
+
+  it("reads a file with -i and writes the translated Bundle to stdout", () => {
+    const inFile = join(dir, "in.hl7");
+    writeFileSync(inFile, ADT_A01);
+    main(["-i", inFile]);
+    expect(JSON.parse(stdout.join("")).resourceType).toBe("Bundle");
+  });
+
+  it("writes the full result shape to stdout with --json", () => {
+    const inFile = join(dir, "in.hl7");
+    writeFileSync(inFile, ADT_A01);
+    main(["-i", inFile, "--json"]);
+    const parsed = JSON.parse(stdout.join(""));
+    expect(parsed).toHaveProperty("mappings");
+    expect(typeof parsed.translated).toBe("object");
+  });
+
+  it("prints the detection summary and does not translate when --detect is passed", () => {
+    const inFile = join(dir, "in.hl7");
+    writeFileSync(inFile, ADT_A01);
+    main(["-i", inFile, "--detect"]);
+    expect(stdout.join("")).toContain("hl7ToFhir — HL7v2 ADT^A01");
+  });
+
+  it("writes to the file given by -o instead of stdout", () => {
+    const inFile = join(dir, "in.hl7");
+    const outFile = join(dir, "out.json");
+    writeFileSync(inFile, ADT_A01);
+    main(["-i", inFile, "-o", outFile]);
+    expect(stdout).toEqual([]);
+    expect(JSON.parse(readFileSync(outFile, "utf8")).resourceType).toBe("Bundle");
+  });
+
+  it("prints each warning to stderr, prefixed", () => {
+    const inFile = join(dir, "in.hl7");
+    writeFileSync(inFile, ADT_A01 + "\rNK1|1|Doe^Jane|SPO");
+    main(["-i", inFile]);
+    expect(stderr.some((line) => line.startsWith("warning: ") && line.includes("NK1"))).toBe(true);
+  });
+
+  it("throws instead of silently exiting when the input file doesn't exist", () => {
+    expect(() => main(["-i", join(dir, "does-not-exist.hl7")])).toThrow();
   });
 });

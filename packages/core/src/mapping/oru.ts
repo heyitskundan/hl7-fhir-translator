@@ -23,6 +23,7 @@ function parseReferenceRange(raw: string | undefined): Range | undefined {
   return { low: { value: Number(m[1]) }, high: { value: Number(m[2]) } };
 }
 
+/** ORU^R01 -> a Bundle with a Patient, a DiagnosticReport, and one Observation per OBX. Throws `FhirValidationError` when PID, OBR, or every OBX is missing; an individual OBX missing its observation identifier (OBX-3) is skipped with a warning instead. */
 export function oruToFhir(message: Hl7Message): { bundle: Bundle; trail: MappingTrail } {
   const trail = new MappingTrail();
   const pid = findSegment(message, "PID");
@@ -121,6 +122,7 @@ export function oruToFhir(message: Hl7Message): { bundle: Bundle; trail: Mapping
   return { bundle, trail };
 }
 
+/** DiagnosticReport+Observations -> an ORU^R01 message, one OBX per Observation numbered sequentially from 1 regardless of source id. Throws `FhirValidationError` when the bundle has no Patient or no DiagnosticReport. */
 export function fhirToOru(bundle: Bundle): { message: Hl7Message; trail: MappingTrail } {
   const trail = new MappingTrail();
   const patient = bundle.entry.find((e) => e.resource.resourceType === "Patient")?.resource as Patient | undefined;

@@ -1,13 +1,18 @@
-# hl7-fhir-translate — browser demo
+# hl7-fhir-translate — browser demo + docs
 
 A demo, not a product — this is the React/Vite/Tailwind UI that shows off the
-[`hl7-fhir-translate`](../packages/core) npm package. It's a thin visual wrapper: paste a
-message, translate, inspect the output and its field-level mapping trail.
+[`hl7-fhir-translate`](../packages/core) npm package. Two tabs: **Translator** (paste a
+message, translate, inspect the output and its field-level mapping trail) and **Docs**
+(the root README, the package's full API reference, and the field-level mapping spec,
+rendered from the same markdown files that live in the repo — nothing duplicated).
 
 **Everything runs client-side.** This app imports `hl7-fhir-translate` directly and calls
 it in the browser — there's no backend, no API route, no network request involved in
-translation. That also means it's just static files: you can deploy `dist/` to any static
-host (GitHub Pages, Netlify, Vercel, S3) with zero server-side config.
+translation. That also means it's just static files: `dist/` is a self-contained static
+site, deployable to any static host with zero server-side config.
+
+**Live at:** [heyitskundan.github.io/hl7-fhir-translator](https://heyitskundan.github.io/hl7-fhir-translator/) —
+deployed from `main` via [`.github/workflows/deploy-pages.yml`](../.github/workflows/deploy-pages.yml).
 
 ## Run it
 
@@ -24,6 +29,10 @@ Opens on `http://localhost:5173`.
 npm run build        # outputs to client/dist/
 npm run preview       # serve the production build locally
 ```
+
+Building with `GITHUB_PAGES=true npm run build` bakes in the `/hl7-fhir-translator/`
+base path GitHub Pages' project-site URL needs; plain `npm run build` builds for serving
+at `/` (e.g. `npm run preview`, or any other static host mounted at its own root).
 
 ## What this is for
 

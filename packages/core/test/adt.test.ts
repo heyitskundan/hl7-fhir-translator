@@ -61,4 +61,22 @@ describe("FHIR Patient(+Encounter) -> ADT^A01", () => {
     const bundle: Bundle = { resourceType: "Bundle", type: "collection", entry: [] };
     expect(() => translateFhirToHl7(JSON.stringify(bundle))).toThrow();
   });
+
+  it("omits the PV1 segment and warns when the bundle has no Encounter resource", () => {
+    const patientOnly: Bundle = {
+      resourceType: "Bundle",
+      type: "collection",
+      entry: [{ resource: { resourceType: "Patient", id: "p1", name: [{ family: "Doe" }] } }],
+    };
+    const result = translateFhirToHl7(JSON.stringify(patientOnly));
+    expect(result.translated).not.toContain("PV1|");
+    expect(result.warnings.some((w) => w.includes("PV1"))).toBe(true);
+  });
+});
+
+describe("malformed ADT input", () => {
+  it("throws a typed error instead of guessing when the PID segment is absent", () => {
+    const noPid = ["MSH|^~\\&|HIS|HOSP|ADT|HOSP|20240101120000||ADT^A01|MSG001|P|2.5", "EVN|A01|20240101120000"].join("\r");
+    expect(() => translateHl7ToFhir(noPid)).toThrow(/PID/);
+  });
 });

@@ -21,7 +21,7 @@ export function DirectionToggle({ direction, onChange }: Props) {
           aria-selected={direction === opt.value}
           onClick={() => onChange(opt.value)}
           className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-            direction === opt.value ? "bg-accent-600 text-surface-950" : "text-slate-400 hover:text-slate-200"
+            direction === opt.value ? "bg-accent-600 text-white" : "text-slate-400 hover:text-slate-200"
           }`}
         >
           {opt.label}

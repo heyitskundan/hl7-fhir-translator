@@ -2,6 +2,7 @@ import { inspectInput, type DetectionResult } from "./inspect.js";
 import { translateFhirToHl7, translateHl7ToFhir } from "./translate.js";
 import type { TranslationDirection, TranslationResult } from "./types.js";
 
+/** Options for `runTranslation`, mirroring the CLI's `--direction`/`--json` flags. */
 export interface CliRunOptions {
   direction?: string;
   json?: boolean;
@@ -18,6 +19,7 @@ export function detectDirection(input: string): TranslationDirection {
   return direction;
 }
 
+/** Validates an explicit `--direction` value, or falls back to `detectDirection` when none was given. */
 export function resolveDirection(input: string, requested: string | undefined): TranslationDirection {
   if (requested === undefined) return detectDirection(input);
   if (requested !== "hl7ToFhir" && requested !== "fhirToHl7") {
@@ -56,6 +58,7 @@ export function formatDetection({ direction, detail }: DetectionResult): string 
   return `fhirToHl7 — FHIR [${detail.resourceTypes.join(", ")}], ${support}`;
 }
 
+/** The text printed by `hl7-fhir-translate --help`. */
 export const HELP_TEXT = `hl7-fhir-translate — deterministic HL7v2 <-> FHIR R4 translation
 
 Usage:
