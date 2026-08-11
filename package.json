@@ -1,0 +1,31 @@
+{
+  "name": "hl7-fhir-translator-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Monorepo for hl7-fhir-translate (the published npm package) and its browser demo",
+  "license": "MIT",
+  "workspaces": [
+    "packages/core",
+    "client"
+  ],
+  "scripts": {
+    "build": "npm run build -w packages/core && npm run build -w client",
+    "test": "npm run test -w packages/core",
+    "dev": "npm run dev -w client",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.4",
+    "prettier": "^3.9.6",
+    "typescript": "^5.7.2",
+    "typescript-eslint": "^8.67.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

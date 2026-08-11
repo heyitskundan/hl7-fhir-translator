@@ -1,0 +1,68 @@
+{
+  "name": "hl7-fhir-translate",
+  "version": "0.1.0",
+  "description": "Deterministic HL7v2 <-> FHIR R4 translator (ADT, ORU, ORM) with a field-level mapping trail and a CLI.",
+  "keywords": [
+    "hl7",
+    "hl7v2",
+    "fhir",
+    "fhir-r4",
+    "healthcare",
+    "healthtech",
+    "interoperability",
+    "hl7-to-fhir",
+    "adt",
+    "oru",
+    "orm"
+  ],
+  "license": "MIT",
+  "author": "Kundan",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/heyitskundan/hl7-fhir-translator.git",
+    "directory": "packages/core"
+  },
+  "homepage": "https://github.com/heyitskundan/hl7-fhir-translator#readme",
+  "bugs": {
+    "url": "https://github.com/heyitskundan/hl7-fhir-translator/issues"
+  },
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": {
+        "import": "./dist/index.d.ts",
+        "require": "./dist/index.d.cts"
+      },
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "bin": {
+    "hl7-fhir-translate": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build && npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsup": "^8.5.1",
+    "typescript": "^5.7.2",
+    "vitest": "^4.1.10"
+  }
+}
