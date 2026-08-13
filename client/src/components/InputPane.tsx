@@ -23,7 +23,7 @@ export function InputPane({ value, onChange, direction, onDirectionChange, onTra
   return (
     <div className="flex h-full flex-col gap-3 p-4 sm:p-6 lg:p-8">
       {/* Matches OutputPane's tab-bar row exactly (h-10, border-b) so both content boxes below start at the same y, not just end up the same height. */}
-      <div className="flex h-10 shrink-0 items-center border-b border-surface-800">
+      <div className="flex h-10 shrink-0 items-center border-b" style={{ borderColor: "var(--color-divider)" }}>
         <DetectionBadge value={value} direction={direction} onSwitchDirection={onDirectionChange} />
       </div>
 
@@ -31,7 +31,8 @@ export function InputPane({ value, onChange, direction, onDirectionChange, onTra
         <pre
           ref={highlightRef}
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 overflow-auto rounded-lg border border-transparent bg-[#282a36] p-4 font-mono text-base leading-relaxed whitespace-pre-wrap break-words text-[#f8f8f2]"
+          className="pointer-events-none absolute inset-0 overflow-auto border border-transparent p-4 font-mono text-base leading-relaxed whitespace-pre-wrap break-words"
+          style={{ background: "var(--color-surface)", color: "var(--color-text)" }}
           dangerouslySetInnerHTML={{ __html: highlighted }}
         />
         <textarea
@@ -52,7 +53,8 @@ export function InputPane({ value, onChange, direction, onDirectionChange, onTra
           }}
           spellCheck={false}
           placeholder={direction === "hl7ToFhir" ? "Paste a raw HL7v2 message…" : "Paste a FHIR R4 resource or Bundle (JSON)…"}
-          className="absolute inset-0 resize-none rounded-lg border border-surface-700 bg-transparent p-4 font-mono text-sm leading-relaxed whitespace-pre-wrap break-words text-transparent caret-slate-200 outline-none placeholder:text-slate-600 focus:border-accent-500"
+          className="input absolute inset-0 resize-none font-mono text-sm leading-relaxed whitespace-pre-wrap break-words !text-transparent placeholder:opacity-40"
+          style={{ background: "transparent", caretColor: "var(--color-text)" }}
         />
       </div>
     </div>

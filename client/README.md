@@ -3,8 +3,9 @@
 A demo, not a product — this is the React/Vite/Tailwind UI that shows off the
 [`hl7-fhir-translator`](../packages/core) npm package. Two tabs: **Translator** (paste a
 message, translate, inspect the output and its field-level mapping trail) and **Docs**
-(the root README, the package's full API reference, and the field-level mapping spec,
-rendered from the same markdown files that live in the repo — nothing duplicated).
+(Getting Started, API Reference, Data Mapping & Schemas, a live Playground, and a
+Changelog — hand-authored pages under `src/components/docs/`, not rendered from the
+repo's markdown files).
 
 **Everything runs client-side.** This app imports `hl7-fhir-translator` directly and calls
 it in the browser — there's no backend, no API route, no network request involved in

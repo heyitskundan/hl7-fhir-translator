@@ -22,34 +22,28 @@ export function DetectionBadge({ value, direction, onSwitchDirection }: Props) {
   const mismatch = detected !== "unknown" && detected !== direction;
 
   let label: string;
-  let tone: "ok" | "warn" | "muted";
+  let tagClass: string;
 
   if (detail.kind === "unknown") {
     label = detected === "unknown" ? "Format not recognized yet" : `Doesn't parse — ${detail.reason}`;
-    tone = "muted";
+    tagClass = "tag-neutral";
   } else if (detail.kind === "hl7") {
     label = detail.supported
       ? `Detected: ${detail.messageType} — ${detail.description}`
       : `Detected: ${detail.messageType} — not supported by this package`;
-    tone = detail.supported ? "ok" : "warn";
+    tagClass = detail.supported ? "tag-accent" : "tag-outline";
   } else {
     label = detail.supported
       ? `Detected: ${detail.resourceTypes.join(", ")} → ${detail.targetMessageType}`
       : `Detected: ${detail.resourceTypes.join(", ")} — no supported target message type`;
-    tone = detail.supported ? "ok" : "warn";
+    tagClass = detail.supported ? "tag-accent" : "tag-outline";
   }
-
-  const toneClass = { ok: "text-accent-400", warn: "text-amber-400", muted: "text-slate-500" }[tone];
 
   return (
     <div className="flex items-center gap-2 text-xs">
-      <span className={toneClass}>{label}</span>
+      <span className={`tag ${tagClass}`}>{label}</span>
       {mismatch && (
-        <button
-          type="button"
-          onClick={() => onSwitchDirection(detected as Direction)}
-          className="rounded border border-surface-700 px-1.5 py-0.5 text-slate-400 transition-colors hover:border-accent-500 hover:text-accent-400"
-        >
+        <button type="button" onClick={() => onSwitchDirection(detected as Direction)} className="btn" style={{ padding: "2px 8px", fontSize: 12 }}>
           Switch direction to match →
         </button>
       )}
