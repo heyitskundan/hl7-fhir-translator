@@ -41,9 +41,9 @@ export function Translator() {
 
   return (
     <div className="flex h-[calc(100vh-4rem)] flex-col">
-      <div className="flex shrink-0 items-center justify-between border-b border-surface-800 px-4 py-3 sm:px-6 lg:px-8">
+      <div className="flex shrink-0 items-center justify-between border-b px-4 py-3 sm:px-6 lg:px-8" style={{ borderColor: "var(--color-divider)" }}>
         <DirectionToggle direction={direction} onChange={handleDirectionChange} />
-        <SampleMessages onSelect={handleSampleSelect} />
+        <SampleMessages direction={direction} onSelect={handleSampleSelect} />
       </div>
 
       <div className="relative flex min-h-0 flex-1">
@@ -66,7 +66,8 @@ export function Translator() {
           disabled={input.trim() === ""}
           title="Translate (⌘⏎)"
           aria-label="Translate"
-          className="absolute top-1/2 left-1/2 z-10 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-4 border-surface-950 bg-accent-600 text-2xl leading-none text-white shadow-lg transition-transform hover:scale-105 hover:bg-accent-500 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
+          className="absolute top-1/2 left-1/2 z-10 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-4 text-2xl leading-none shadow-lg transition-transform hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:scale-100"
+          style={{ borderColor: "var(--color-bg)", background: "var(--color-accent)", color: "var(--color-bg)" }}
         >
           →
         </button>

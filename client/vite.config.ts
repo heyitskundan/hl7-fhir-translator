@@ -1,4 +1,4 @@
-import { defineConfig, searchForWorkspaceRoot } from "vite";
+import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 // GitHub Pages serves a project site at https://<user>.github.io/<repo>/, so the
@@ -10,10 +10,5 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    fs: {
-      // The Docs tab pulls README.md/MAPPING.md straight from the monorepo root via
-      // `?raw` imports, which sits outside this package's own directory.
-      allow: [searchForWorkspaceRoot(process.cwd())],
-    },
   },
 });
