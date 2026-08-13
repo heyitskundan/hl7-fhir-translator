@@ -11,7 +11,7 @@
   ],
   "scripts": {
     "build": "npm run build -w packages/core && npm run build -w client",
-    "test": "npm run test -w packages/core",
+    "test": "npm run test -w packages/core && npm run test -w client",
     "dev": "npm run dev -w client",
     "lint": "eslint .",
     "format": "prettier --write .",

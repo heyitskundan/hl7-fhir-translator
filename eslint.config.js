@@ -17,7 +17,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["client/src/**/*.{ts,tsx}"],
+    files: ["client/**/*.{ts,tsx}"],
     plugins: {
       "react-hooks": reactHooks,
       "react-refresh": reactRefresh,
@@ -29,7 +29,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["**/*.test.ts"],
+    files: ["**/*.test.{ts,tsx}"],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
     },
