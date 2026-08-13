@@ -3,7 +3,7 @@ import { field, segment } from "../hl7/serializer.js";
 import { DEFAULT_DELIMITERS, type Hl7Field, type Hl7Message } from "../hl7/types.js";
 import type { Bundle, DiagnosticReport, Observation, Patient, Range } from "../fhir/types.js";
 import { FhirValidationError } from "../fhir/types.js";
-import { CODE_SYSTEMS, MappingTrail, fhirDateTimeToHl7, hl7DateTimeToFhir, nextMessageControlId, nowHl7DateTime } from "./common.js";
+import { CODE_SYSTEMS, MappingTrail, buildMsh, fhirDateTimeToHl7, hl7DateTimeToFhir, nextMessageControlId, nowHl7DateTime } from "./common.js";
 import { buildPatientFromPid, buildPidFieldsFromPatient } from "./adt.js";
 
 const KNOWN_ORU_SEGMENTS = new Set(["MSH", "PID", "OBR", "OBX"]);
@@ -75,14 +75,19 @@ export function oruToFhir(message: Hl7Message): { bundle: Bundle; trail: Mapping
       subject: { reference: `Patient/${patient.id}` },
     };
     trail.add(`OBX-3 (#${i + 1})`, `Observation[${i}].code`, `${obsCode} (${obsDisplay ?? "n/a"})`);
+    trail.add(`OBX-1 (#${i + 1})`, `Observation[${i}].id`, observation.id ?? "");
 
     const valueType = getField(obx, 2);
     const rawValue = getField(obx, 5);
     if (valueType === "NM" && rawValue !== undefined) {
-      observation.valueQuantity = { value: Number(rawValue), unit: getField(obx, 6) };
-      trail.add(`OBX-5 (#${i + 1})`, `Observation[${i}].valueQuantity`, `${rawValue} ${getField(obx, 6) ?? ""}`.trim());
+      const unit = getField(obx, 6);
+      observation.valueQuantity = { value: Number(rawValue), unit };
+      trail.add(`OBX-2 (#${i + 1})`, `Observation[${i}].valueQuantity`, valueType);
+      trail.add(`OBX-5 (#${i + 1})`, `Observation[${i}].valueQuantity.value`, rawValue);
+      if (unit) trail.add(`OBX-6 (#${i + 1})`, `Observation[${i}].valueQuantity.unit`, unit);
     } else if (rawValue !== undefined) {
       observation.valueString = rawValue;
+      trail.add(`OBX-2 (#${i + 1})`, `Observation[${i}].valueString`, valueType ?? "n/a");
       trail.add(`OBX-5 (#${i + 1})`, `Observation[${i}].valueString`, rawValue);
     }
 
@@ -136,19 +141,7 @@ export function fhirToOru(bundle: Bundle): { message: Hl7Message; trail: Mapping
   const controlId = nextMessageControlId();
   const now = nowHl7DateTime();
 
-  const msh = segment("MSH", {
-    2: field("^~\\&"),
-    3: field("FHIR-TRANSLATOR"),
-    4: field("HL7FHIR"),
-    5: field("HIS"),
-    6: field("HOSP"),
-    7: field(now),
-    9: field("ORU", "R01"),
-    10: field(controlId),
-    11: field("P"),
-    12: field("2.5"),
-  });
-  trail.add("Bundle.type", "MSH-9", "ORU^R01");
+  const msh = buildMsh(trail, "ORU", "R01", controlId, now);
 
   const pidFields = buildPidFieldsFromPatient(patient, trail);
   const pid = segment("PID", { 1: field("1"), ...pidFields });

@@ -1,4 +1,6 @@
 import type { Mapping } from "../types.js";
+import { field, segment } from "../hl7/serializer.js";
+import type { Hl7Segment } from "../hl7/types.js";
 
 /** Canonical HL7 Terminology / LOINC system URLs used across every mapper's coded fields. */
 export const CODE_SYSTEMS = {
@@ -7,6 +9,10 @@ export const CODE_SYSTEMS = {
   actCode: "http://terminology.hl7.org/CodeSystem/v3-ActCode",
   observationInterpretation: "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation",
   encounterParticipantType: "http://terminology.hl7.org/CodeSystem/v3-ParticipationType",
+  cvx: "http://hl7.org/fhir/sid/cvx",
+  appointmentType: "http://terminology.hl7.org/CodeSystem/v2-0276",
+  documentType: "http://loinc.org",
+  specimenType: "http://terminology.hl7.org/CodeSystem/v2-0487",
 } as const;
 
 /** Collects the field-level trail for a translation as it runs, in either direction. */
@@ -103,4 +109,22 @@ export function nowHl7DateTime(): string {
   const d = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}`;
+}
+
+/** Builds the MSH segment shared by every FHIR->HL7v2 mapper: fixed sending/receiving application and facility, HL7 2.5, and the given category^trigger in MSH-9. Also records the Bundle.type -> MSH-9 mapping. */
+export function buildMsh(trail: MappingTrail, category: string, trigger: string, controlId: string, now: string): Hl7Segment {
+  const msh = segment("MSH", {
+    2: field("^~\\&"),
+    3: field("FHIR-TRANSLATOR"),
+    4: field("HL7FHIR"),
+    5: field("HIS"),
+    6: field("HOSP"),
+    7: field(now),
+    9: field(category, trigger),
+    10: field(controlId),
+    11: field("P"),
+    12: field("2.5"),
+  });
+  trail.add("Bundle.type", "MSH-9", `${category}^${trigger}`);
+  return msh;
 }

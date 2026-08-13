@@ -143,8 +143,74 @@ export interface ServiceRequest {
   occurrenceDateTime?: string;
 }
 
+/** A vaccination event. Produced from/consumed for VXU^V04. */
+export interface Immunization {
+  resourceType: "Immunization";
+  id?: string;
+  meta?: Meta;
+  status: "completed" | "entered-in-error" | "not-done";
+  vaccineCode: CodeableConcept;
+  patient?: Reference;
+  occurrenceDateTime?: string;
+  lotNumber?: string;
+  expirationDate?: string;
+  manufacturer?: { display?: string };
+  doseQuantity?: Quantity;
+  performer?: { actor?: Reference }[];
+}
+
+/** A scheduled visit/booking. Produced from/consumed for SIU^S12. */
+export interface Appointment {
+  resourceType: "Appointment";
+  id?: string;
+  meta?: Meta;
+  status: "proposed" | "booked" | "cancelled" | "fulfilled" | "unknown";
+  appointmentType?: CodeableConcept;
+  reasonCode?: CodeableConcept[];
+  description?: string;
+  start?: string;
+  end?: string;
+  minutesDuration?: number;
+  participant: { actor?: Reference; type?: CodeableConcept[]; status: "accepted" | "needs-action" }[];
+}
+
+/** A physical specimen collected for testing. Produced from/consumed for OML^O21's SPM segment. */
+export interface Specimen {
+  resourceType: "Specimen";
+  id?: string;
+  meta?: Meta;
+  type?: CodeableConcept;
+  subject?: Reference;
+  collection?: { collectedDateTime?: string };
+  request?: Reference[];
+}
+
+/** A binary/text attachment, e.g. a clinical document's content metadata. */
+export interface Attachment {
+  contentType?: string;
+  title?: string;
+  creation?: string;
+}
+
+/** A reference to a clinical document. Produced from/consumed for MDM^T02. */
+export interface DocumentReference {
+  resourceType: "DocumentReference";
+  id?: string;
+  meta?: Meta;
+  status: "current" | "superseded" | "entered-in-error";
+  docStatus?: "preliminary" | "final" | "amended";
+  masterIdentifier?: Identifier;
+  type?: CodeableConcept;
+  subject?: Reference;
+  date?: string;
+  author?: Reference[];
+  description?: string;
+  content: { attachment: Attachment }[];
+}
+
 /** Any FHIR resource this package produces or consumes. */
-export type FhirResource = Patient | Encounter | Observation | DiagnosticReport | ServiceRequest;
+export type FhirResource =
+  Patient | Encounter | Observation | DiagnosticReport | ServiceRequest | Immunization | Appointment | Specimen | DocumentReference;
 
 /** One resource entry within a Bundle. */
 export interface BundleEntry {
