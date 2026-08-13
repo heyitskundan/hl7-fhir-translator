@@ -1,7 +1,7 @@
 {
   "name": "hl7-fhir-translator",
   "version": "0.1.0",
-  "description": "Deterministic HL7v2 <-> FHIR R4 translator (ADT, ORU, ORM) with a field-level mapping trail and a CLI.",
+  "description": "Deterministic HL7v2 <-> FHIR R4 translator (ADT, ORU, ORM, VXU, SIU, OML, MDM) with a field-level mapping trail and a CLI.",
   "keywords": [
     "hl7",
     "hl7v2",
@@ -13,7 +13,15 @@
     "hl7-to-fhir",
     "adt",
     "oru",
-    "orm"
+    "orm",
+    "vxu",
+    "immunization",
+    "siu",
+    "appointment-scheduling",
+    "oml",
+    "lab-orders",
+    "mdm",
+    "document-management"
   ],
   "license": "MIT",
   "author": "Kundan",

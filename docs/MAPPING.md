@@ -4,7 +4,7 @@ This is the field-level specification for what [`hl7-fhir-translator`](../packag
 actually maps — every HL7v2 field it reads or writes, and exactly which FHIR R4 path it
 corresponds to. It exists so a reviewer can audit correctness without reading the
 implementation, and so a contributor extending the package has a single source of truth
-to update alongside the code. Covers the four message types this package supports.
+to update alongside the code. Covers the eight message types this package supports.
 
 ## Contents
 
@@ -14,8 +14,12 @@ to update alongside the code. Covers the four message types this package support
 4. [ADT^A01 (admission) and ADT^A08 (update)](#4-adta01-admission-and-adta08-update)
 5. [ORU^R01 (unsolicited lab result)](#5-orur01-unsolicited-lab-result)
 6. [ORM^O01 (general order)](#6-ormo01-general-order)
-7. [Adding a new message type](#7-adding-a-new-message-type)
-8. [Detection rules (`inspectInput`)](#8-detection-rules-inspectinput)
+7. [VXU^V04 (immunization record update)](#7-vxuv04-immunization-record-update)
+8. [SIU^S12 (appointment scheduling)](#8-sius12-appointment-scheduling)
+9. [OML^O21 (laboratory order)](#9-omlo21-laboratory-order)
+10. [MDM^T02 (document management)](#10-mdmt02-document-management)
+11. [Adding a new message type](#11-adding-a-new-message-type)
+12. [Detection rules (`inspectInput`)](#12-detection-rules-inspectinput)
 
 ## 1. Versions
 
@@ -42,13 +46,17 @@ to update alongside the code. Covers the four message types this package support
 
 ## 3. Terminology systems used
 
-| System                              | URL                                                                  | Used for                                                   |
-| ----------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------------- |
-| LOINC                               | `http://loinc.org`                                                   | Lab/order codes (`OBR-4`, `OBX-3`)                         |
-| HL7 v2 Table 0203 (Identifier Type) | `http://terminology.hl7.org/CodeSystem/v2-0203`                      | `Patient.identifier[].type`                                |
-| HL7 v3 ActCode                      | `http://terminology.hl7.org/CodeSystem/v3-ActCode`                   | `Encounter.class`                                          |
-| HL7 v3 ObservationInterpretation    | `http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation` | `Observation.interpretation` (abnormal flags)              |
-| HL7 v3 ParticipationType            | `http://terminology.hl7.org/CodeSystem/v3-ParticipationType`         | `Encounter.participant[].type` (attending doctor = `ATND`) |
+| System                               | URL                                                                  | Used for                                                   |
+| ------------------------------------ | -------------------------------------------------------------------- | ---------------------------------------------------------- |
+| LOINC                                | `http://loinc.org`                                                   | Lab/order codes (`OBR-4`, `OBX-3`)                         |
+| HL7 v2 Table 0203 (Identifier Type)  | `http://terminology.hl7.org/CodeSystem/v2-0203`                      | `Patient.identifier[].type`                                |
+| HL7 v3 ActCode                       | `http://terminology.hl7.org/CodeSystem/v3-ActCode`                   | `Encounter.class`                                          |
+| HL7 v3 ObservationInterpretation     | `http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation` | `Observation.interpretation` (abnormal flags)              |
+| HL7 v3 ParticipationType             | `http://terminology.hl7.org/CodeSystem/v3-ParticipationType`         | `Encounter.participant[].type` (attending doctor = `ATND`) |
+| CVX (vaccine codes)                  | `http://hl7.org/fhir/sid/cvx`                                        | `Immunization.vaccineCode` (`RXA-5`)                       |
+| HL7 v2 Table 0276 (Appointment Type) | `http://terminology.hl7.org/CodeSystem/v2-0276`                      | `Appointment.appointmentType` (`SCH-8`)                    |
+| HL7 v2 Table 0487 (Specimen Type)    | `http://terminology.hl7.org/CodeSystem/v2-0487`                      | `Specimen.type` (`SPM-4`)                                  |
+| LOINC (document type)                | `http://loinc.org`                                                   | `DocumentReference.type` (`TXA-2`)                         |
 
 These are the only systems used. Codes are carried through exactly as given in the
 source — e.g. a LOINC code found in `OBX-3.1` is copied straight into the output.
@@ -511,20 +519,392 @@ Input (`samples/orm_o01.hl7`) produces a 2-entry Bundle:
 
 ---
 
-## 7. Adding a new message type
+## 7. VXU^V04 (immunization record update)
 
-The mapping tables above are implemented, one file per message type, in
-[`packages/core/src/mapping/`](../packages/core/src/mapping) (`adt.ts`, `oru.ts`,
-`orm.ts`), sharing PID↔Patient logic from `buildPatientFromPid`/`buildPidFieldsFromPatient`
-in `adt.ts` and shared helpers (date/code lookups) in `common.ts`. `registry.ts` routes
-`MSH-9` (forward) or resource-type presence (reverse) to the right mapper. To add a
-message type: write its forward/reverse functions following that pattern, register it in
-`registry.ts` and `SUPPORTED_MESSAGE_TYPES`, add its section to this document, and add
-table-driven tests in `packages/core/test/` following the existing files.
+**Segments read**: `MSH`, `PID`, `RXA`
+**Resources produced**: `Patient`, `Immunization`
+
+### 7.1 Forward: HL7v2 → FHIR
+
+Patient fields follow the same `PID` table as §4.1/§5.1/§6.1 above. Immunization fields:
+
+| HL7v2 field | FHIR path                                                | Notes                                                         |
+| ----------- | -------------------------------------------------------- | ------------------------------------------------------------- |
+| `RXA-20`    | `Immunization.status`                                    | `CP`/`PA`→`completed`, `RE`/`NA`→`not-done`, else `completed` |
+| `RXA-5.1`   | `Immunization.vaccineCode.coding[0].code`                | System = CVX                                                  |
+| `RXA-5.2`   | `Immunization.vaccineCode.coding[0].display` and `.text` |                                                               |
+| `RXA-3`     | `Immunization.occurrenceDateTime`                        | Date/time administration started                              |
+| `RXA-6`     | `Immunization.doseQuantity.value`                        | Parsed with `Number()`                                        |
+| `RXA-7.1`   | `Immunization.doseQuantity.unit`                         | Only set alongside `doseQuantity.value`                       |
+| `RXA-15`    | `Immunization.lotNumber`                                 |                                                               |
+| `RXA-16`    | `Immunization.expirationDate`                            | `YYYYMMDD` → `YYYY-MM-DD`                                     |
+| `RXA-17.2`  | `Immunization.manufacturer.display`                      |                                                               |
+| `RXA-10.2`  | `Immunization.performer[0].actor.display`                | Administering provider family name                            |
+| `RXA-10.3`  | `Immunization.performer[0].actor.display`                | Administering provider given name (joined as "given family")  |
+
+`Immunization.patient` is always a reference to the Patient built from `PID`.
+
+### 7.2 Reverse: FHIR → HL7v2
+
+| FHIR path                                 | HL7v2 field     | Notes                                                                                    |
+| ----------------------------------------- | --------------- | ---------------------------------------------------------------------------------------- |
+| `Immunization.occurrenceDateTime`         | `RXA-3`         |                                                                                          |
+| `Immunization.vaccineCode.coding[0]`      | `RXA-5`         | System component hardcoded to `CVX` on the way out                                       |
+| `Immunization.doseQuantity`               | `RXA-6`/`RXA-7` |                                                                                          |
+| `Immunization.performer[0].actor.display` | `RXA-10`        | Split on the first space: everything after it → family, first word → given               |
+| `Immunization.lotNumber`                  | `RXA-15`        |                                                                                          |
+| `Immunization.expirationDate`             | `RXA-16`        | `YYYY-MM-DD` → `YYYYMMDD`                                                                |
+| `Immunization.manufacturer.display`       | `RXA-17`        | System component hardcoded to `MVX` on the way out                                       |
+| `Immunization.status`                     | `RXA-20`        | Inverse of the forward table: `completed`→`CP`, `not-done`→`RE`, `entered-in-error`→`NA` |
+
+`RXA-1`/`RXA-2` (give/administration sub-ID counters) are always synthesized as `0`/`1`.
+`MSH`/`PID` synthesis follows the same rules as §4.2.
+
+### 7.3 Not mapped
+
+Any segment other than `MSH`/`PID`/`RXA` (e.g. `ORC`, `RXR`, `OBX` vaccine-funding/eligibility
+observations) is warned about and skipped.
+
+### 7.4 Worked example
+
+Input (`samples/vxu_v04.hl7`):
+
+```hl7
+MSH|^~\&|VIS|CLINIC|HIS|HOSP|20240103090000||VXU^V04|MSG010|P|2.5
+PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M
+RXA|0|1|20240103090000||08^Hepatitis B pediatric^CVX|0.5|mL^milliliter^UCUM|||1234^Smith^Jane^M^MD|||||LOT12345|20250601|MSD^Merck^MVX|||CP
+```
+
+Output (`translateHl7ToFhir` — the `Immunization` entry):
+
+```json
+{
+  "resourceType": "Immunization",
+  "id": "immunization-1",
+  "status": "completed",
+  "vaccineCode": {
+    "coding": [
+      {
+        "system": "http://hl7.org/fhir/sid/cvx",
+        "code": "08",
+        "display": "Hepatitis B pediatric"
+      }
+    ],
+    "text": "Hepatitis B pediatric"
+  },
+  "patient": {
+    "reference": "Patient/patient-1"
+  },
+  "occurrenceDateTime": "2024-01-03T09:00:00Z",
+  "doseQuantity": {
+    "value": 0.5,
+    "unit": "mL"
+  },
+  "lotNumber": "LOT12345",
+  "expirationDate": "2025-06-01",
+  "manufacturer": {
+    "display": "Merck"
+  },
+  "performer": [
+    {
+      "actor": {
+        "display": "Jane Smith"
+      }
+    }
+  ]
+}
+```
 
 ---
 
-## 8. Detection rules (`inspectInput`)
+## 8. SIU^S12 (appointment scheduling)
+
+**Segments read**: `MSH`, `SCH`, `PID`, `AIL` (location), `AIP` (personnel)
+**Resources produced**: `Patient`, `Appointment`
+
+### 8.1 Forward: HL7v2 → FHIR
+
+Patient fields follow the same `PID` table as §4.1 above. Appointment fields:
+
+| HL7v2 field | FHIR path                                                   | Notes                                                                                                   |
+| ----------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| `SCH-25`    | `Appointment.status`                                        | `BOOKED`→`booked`, `CANCELLED`→`cancelled`, `COMPLETE`→`fulfilled`, `PENDING`→`proposed`, else `booked` |
+| `SCH-7.1`   | `Appointment.reasonCode[0].coding[0].code`                  |                                                                                                         |
+| `SCH-7.2`   | `Appointment.reasonCode[0].coding[0].display` and `.text`   |                                                                                                         |
+| `SCH-8.1`   | `Appointment.appointmentType.coding[0].code`                | System = v2-0276                                                                                        |
+| `SCH-8.2`   | `Appointment.appointmentType.coding[0].display` and `.text` |                                                                                                         |
+| `SCH-9`     | `Appointment.minutesDuration`                               | Parsed with `Number()`; `SCH-10` (units) is read only to annotate the mapping trail, not converted      |
+| `SCH-11.4`  | `Appointment.start`                                         | 4th component of the SCH-11 timing quantity (TQ) — start date/time                                      |
+| `SCH-11.5`  | `Appointment.end`                                           | 5th component — end date/time                                                                           |
+| `AIL-3.2`   | `Appointment.participant[].actor.display`                   | Scheduled location name, falls back to `AIL-3.1` if `.2` is absent                                      |
+| `AIP-3.2`   | `Appointment.participant[].actor.display`                   | Scheduled practitioner family name                                                                      |
+| `AIP-3.3`   | `Appointment.participant[].actor.display`                   | Scheduled practitioner given name (joined as "given family")                                            |
+
+`Appointment.participant[0]` is always a reference to the Patient built from `PID`, with
+`status: "accepted"`; the location (from `AIL`) and practitioner (from `AIP`) are appended
+as additional participants, also `status: "accepted"` — this package doesn't track pending
+invitations.
+
+### 8.2 Reverse: FHIR → HL7v2
+
+| FHIR path                                  | HL7v2 field      | Notes                                                                                                                                                                                                                         |
+| ------------------------------------------ | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `Appointment.reasonCode[0].coding[0]`      | `SCH-7`          |                                                                                                                                                                                                                               |
+| `Appointment.appointmentType.coding[0]`    | `SCH-8`          |                                                                                                                                                                                                                               |
+| `Appointment.minutesDuration`              | `SCH-9`/`SCH-10` | `SCH-10` is always written as `MIN`                                                                                                                                                                                           |
+| `Appointment.start`                        | `SCH-11.4`       |                                                                                                                                                                                                                               |
+| `Appointment.end`                          | `SCH-11.5`       |                                                                                                                                                                                                                               |
+| `Appointment.status`                       | `SCH-25`         | Inverse of the forward table: `booked`→`BOOKED`, `cancelled`→`CANCELLED`, `fulfilled`→`COMPLETE`, `proposed`→`PENDING`, else `BOOKED`                                                                                         |
+| `Appointment.participant[1].actor.display` | `AIL-3.2`        | The first non-patient participant is written back as the location. Any further participant (e.g. a practitioner) can't be distinguished from a location by shape alone — it's warned about and skipped rather than guessed at |
+
+`SCH-1`/`SCH-2` (placer/filler appointment ID) are synthesized from the generated control
+ID. `MSH`/`PID` synthesis follows the same rules as §4.2.
+
+### 8.3 Not mapped
+
+Any segment other than `MSH`/`SCH`/`PID`/`AIL`/`AIP` (e.g. `AIS`, `AIG`, `NTE`) is warned
+about and skipped. A second or later non-patient `Appointment.participant` is warned about
+on the reverse direction, per §8.2.
+
+### 8.4 Worked example
+
+Input (`samples/siu_s12.hl7`):
+
+```hl7
+MSH|^~\&|SCH|CLINIC|HIS|HOSP|20240104080000||SIU^S12|MSG011|P|2.5
+SCH|APT001|APT001|||||CHECKUP^Annual physical^L|ROUTINE^Routine appointment^L|30|MIN|^^^20240110090000^20240110093000||||||||||||||BOOKED
+PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M
+AIL|1||OFFICE1^Clinic Room 1
+AIP|1||1234^Smith^Jane^M^MD
+```
+
+Output (`translateHl7ToFhir` — the `Appointment` entry):
+
+```json
+{
+  "resourceType": "Appointment",
+  "id": "appointment-1",
+  "status": "booked",
+  "participant": [
+    { "actor": { "reference": "Patient/patient-1" }, "status": "accepted" },
+    { "actor": { "display": "Clinic Room 1" }, "status": "accepted" },
+    { "actor": { "display": "Jane Smith" }, "status": "accepted" }
+  ],
+  "reasonCode": [
+    {
+      "coding": [{ "code": "CHECKUP", "display": "Annual physical" }],
+      "text": "Annual physical"
+    }
+  ],
+  "appointmentType": {
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0276",
+        "code": "ROUTINE",
+        "display": "Routine appointment"
+      }
+    ],
+    "text": "Routine appointment"
+  },
+  "minutesDuration": 30,
+  "start": "2024-01-10T09:00:00Z",
+  "end": "2024-01-10T09:30:00Z"
+}
+```
+
+---
+
+## 9. OML^O21 (laboratory order)
+
+OML^O21 is what distinguishes a lab order from a general order (§6, ORM^O01): it carries a
+`SPM` (specimen) segment. `registry.ts` uses the presence of a `Specimen` resource to route
+a FHIR bundle back to this mapper instead of ORM's.
+
+**Segments read**: `MSH`, `PID`, `ORC`, `OBR`, `SPM`
+**Resources produced**: `Patient`, `ServiceRequest`, `Specimen`
+
+### 9.1 Forward: HL7v2 → FHIR
+
+Patient and order fields follow the same `PID`/`ORC`/`OBR` tables as §6.1 above (`ORC-1` →
+`ServiceRequest.status`, `ORC-9` → `authoredOn`, `ORC-12` → `requester.display`, `OBR-4` →
+`code`, `OBR-7` → `occurrenceDateTime`). Specimen fields:
+
+| HL7v2 field | FHIR path                                     | Notes            |
+| ----------- | --------------------------------------------- | ---------------- |
+| `SPM-4.1`   | `Specimen.type.coding[0].code`                | System = v2-0487 |
+| `SPM-4.2`   | `Specimen.type.coding[0].display` and `.text` |                  |
+| `SPM-17`    | `Specimen.collection.collectedDateTime`       |                  |
+
+`Specimen.subject` references the same Patient as the ServiceRequest; `Specimen.request[0]`
+references the ServiceRequest built from `ORC`/`OBR`.
+
+### 9.2 Reverse: FHIR → HL7v2
+
+| FHIR path                               | HL7v2 field | Notes                                                                                                       |
+| --------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------- |
+| `Specimen.type.coding[0]`               | `SPM-4`     | System component hardcoded to `HL70487` on the way out                                                      |
+| `Specimen.collection.collectedDateTime` | `SPM-17`    |                                                                                                             |
+| _(constant)_                            | `SPM-2`     | The same synthesized placer order number as `ORC-2`/`OBR-2` is written to `SPM-2`, keeping all three linked |
+
+`ServiceRequest` fields are written back exactly as in §6.2. `MSH`/`PID` synthesis follows
+the same rules as §4.2.
+
+### 9.3 Not mapped
+
+Any segment other than `MSH`/`PID`/`ORC`/`OBR`/`SPM` (e.g. `TQ1`, `DG1`, `NTE`) is warned
+about and skipped.
+
+### 9.4 Worked example
+
+Input (`samples/oml_o21.hl7`) produces a 3-entry Bundle: `Patient`, `ServiceRequest`, and
+`Specimen`:
+
+```json
+{
+  "resourceType": "ServiceRequest",
+  "id": "servicerequest-1",
+  "status": "active",
+  "intent": "order",
+  "code": {
+    "coding": [{ "system": "http://loinc.org", "code": "1558-6", "display": "Glucose" }],
+    "text": "Glucose"
+  },
+  "subject": { "reference": "Patient/patient-1" },
+  "authoredOn": "2024-01-05T10:00:00Z",
+  "occurrenceDateTime": "2024-01-05T10:00:00Z",
+  "requester": { "display": "Jane Smith" }
+}
+```
+
+```json
+{
+  "resourceType": "Specimen",
+  "id": "specimen-1",
+  "type": {
+    "coding": [
+      {
+        "system": "http://terminology.hl7.org/CodeSystem/v2-0487",
+        "code": "SER",
+        "display": "Serum"
+      }
+    ],
+    "text": "Serum"
+  },
+  "subject": { "reference": "Patient/patient-1" },
+  "request": [{ "reference": "ServiceRequest/servicerequest-1" }],
+  "collection": { "collectedDateTime": "2024-01-05T10:15:00Z" }
+}
+```
+
+---
+
+## 10. MDM^T02 (document management)
+
+**Segments read**: `MSH`, `EVN`, `PID`, `TXA`
+**Resources produced**: `Patient`, `DocumentReference`
+
+### 10.1 Forward: HL7v2 → FHIR
+
+Patient fields follow the same `PID` table as §4.1 above. Document fields:
+
+| HL7v2 field | FHIR path                                              | Notes                                                                              |
+| ----------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| `TXA-2.1`   | `DocumentReference.type.coding[0].code`                | System = LOINC                                                                     |
+| `TXA-2.2`   | `DocumentReference.type.coding[0].display` and `.text` |                                                                                    |
+| `TXA-17`    | `DocumentReference.docStatus`                          | `AU`/`TR`→`final`, `DI`/`DO`/`IP`/`PA`→`preliminary`; absent → `docStatus` omitted |
+| `TXA-6`     | `DocumentReference.date`                               | Origination date/time; also copied to `content[0].attachment.creation`             |
+| `TXA-12`    | `DocumentReference.masterIdentifier.value`             | Unique document number                                                             |
+| `TXA-9.2`   | `DocumentReference.author[0].display`                  | Originator family name                                                             |
+| `TXA-9.3`   | `DocumentReference.author[0].display`                  | Originator given name (joined as "given family")                                   |
+
+`DocumentReference.status` is always `current` (this package doesn't map amendment/rescind
+notification triggers, only the T02 "original document" trigger).
+`DocumentReference.content[0].attachment.contentType` is always synthesized as `text/plain`
+since TXA carries no content-type field; `.title` is set from `TXA-2`'s display. HL7v2's
+`TXA` segment carries no actual document bytes (those travel separately, e.g. as base64 in
+an `OBX`), so `content[0].attachment` never has a `data` field — only its metadata.
+
+### 10.2 Reverse: FHIR → HL7v2
+
+| FHIR path                                  | HL7v2 field | Notes                                                                                         |
+| ------------------------------------------ | ----------- | --------------------------------------------------------------------------------------------- |
+| `DocumentReference.type.coding[0]`         | `TXA-2`     | System component hardcoded to `LN` on the way out                                             |
+| `DocumentReference.date`                   | `TXA-6`     |                                                                                               |
+| `DocumentReference.author[0].display`      | `TXA-9`     | Split on the first space: everything after it → family, first word → given                    |
+| `DocumentReference.masterIdentifier.value` | `TXA-12`    |                                                                                               |
+| `DocumentReference.docStatus`              | `TXA-17`    | Inverse of the forward table: `final`→`AU`, `preliminary`→`IP`, `amended`→`TR`; absent → `IP` |
+
+`EVN-1`/`EVN-2` are synthesized the same way as ADT's (§4.2). `MSH`/`PID` synthesis follows
+the same rules as §4.2.
+
+### 10.3 Not mapped
+
+Any segment other than `MSH`/`EVN`/`PID`/`TXA` (e.g. `OBX` carrying the actual document
+content, `PV1`) is warned about and skipped.
+
+### 10.4 Worked example
+
+Input (`samples/mdm_t02.hl7`):
+
+```hl7
+MSH|^~\&|TRAN|HOSP|HIS|HOSP|20240106140000||MDM^T02|MSG013|P|2.5
+EVN|T02|20240106140000
+PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M
+TXA|1|18842-5^Discharge summary^LN||20240106140000||20240106140000|||5678^Nguyen^Anh^^MD|||DOC0100|||||AU
+```
+
+Output (`translateHl7ToFhir` — the `DocumentReference` entry):
+
+```json
+{
+  "resourceType": "DocumentReference",
+  "id": "documentreference-1",
+  "status": "current",
+  "docStatus": "final",
+  "type": {
+    "coding": [{ "system": "http://loinc.org", "code": "18842-5", "display": "Discharge summary" }],
+    "text": "Discharge summary"
+  },
+  "subject": { "reference": "Patient/patient-1" },
+  "content": [
+    {
+      "attachment": {
+        "contentType": "text/plain",
+        "title": "Discharge summary",
+        "creation": "2024-01-06T14:00:00Z"
+      }
+    }
+  ],
+  "date": "2024-01-06T14:00:00Z",
+  "masterIdentifier": { "value": "DOC0100" },
+  "author": [{ "display": "Anh Nguyen" }]
+}
+```
+
+---
+
+## 11. Adding a new message type
+
+The mapping tables above are implemented, one file per message type, in
+[`packages/core/src/mapping/`](../packages/core/src/mapping) (`adt.ts`, `oru.ts`,
+`orm.ts`, `vxu.ts`, `siu.ts`, `oml.ts`, `mdm.ts`), sharing PID↔Patient logic from
+`buildPatientFromPid`/`buildPidFieldsFromPatient` in `adt.ts` and shared helpers
+(date/code lookups) in `common.ts`. `registry.ts` routes `MSH-9` (forward) or
+resource-type presence (reverse) to the right mapper — reverse routing checks the most
+specific resource type first (e.g. `Specimen` before `ServiceRequest`) since some types
+are shared by more than one message type. To add a message type: write its forward/reverse
+functions following that pattern, register it in `registry.ts` and
+`SUPPORTED_MESSAGE_TYPES`, add its section to this document, and add table-driven tests in
+`packages/core/test/` following the existing files. If you also add a way to
+machine-verify this document against the code, extend
+[`packages/core/test/mapping-audit.test.ts`](../packages/core/test/mapping-audit.test.ts)
+(see below) — it parses every `##` section's forward table here and asserts each row's
+source field actually appears in that message type's `mappings[]` output, so a table that
+drifts from the implementation fails CI instead of silently going stale.
+
+---
+
+## 12. Detection rules (`inspectInput`)
 
 `inspectInput(input)` (implemented in
 [`packages/core/src/inspect.ts`](../packages/core/src/inspect.ts)) identifies what a
@@ -586,9 +966,12 @@ Once direction is `fhirToHl7`:
     `resourceType` — matching how `translateFhirToHl7` auto-wraps a bare resource into a
     one-entry `Bundle` before translating.
   - `targetMessageType` is computed by the same rule `fhirToHl7ByResourceType` uses to
-    pick a mapper (checked in this priority order, first match wins): `ServiceRequest`
-    present → `ORM^O01`; else `DiagnosticReport` present → `ORU^R01`; else `Patient`
-    present → `ADT^A01`. `supported` is `true` iff one of those matched.
+    pick a mapper (checked in this priority order, first match wins, most specific first
+    since some resource types are shared by more than one message type): `Specimen`
+    present → `OML^O21`; else `ServiceRequest` present → `ORM^O01`; else
+    `DiagnosticReport` present → `ORU^R01`; else `Immunization` present → `VXU^V04`; else
+    `Appointment` present → `SIU^S12`; else `DocumentReference` present → `MDM^T02`; else
+    `Patient` present → `ADT^A01`. `supported` is `true` iff one of those matched.
 
 As with HL7 detection, `supported: false` (e.g. `resourceTypes: ["Practitioner"]`, which
 matches none of the three rules) is the signal to check _before_ calling

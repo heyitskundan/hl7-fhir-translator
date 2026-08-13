@@ -22,12 +22,16 @@ function with zero runtime dependencies — install it and call it, nothing else
 
 ## Supported message types
 
-| HL7v2                  | FHIR                                 | Direction |
-| ---------------------- | ------------------------------------ | --------- |
-| `ADT^A01` (admission)  | `Patient` + `Encounter`              | both      |
-| `ADT^A08` (update)     | `Patient` + `Encounter`              | both      |
-| `ORU^R01` (lab result) | `DiagnosticReport` + `Observation[]` | both      |
-| `ORM^O01` (order)      | `ServiceRequest`                     | both      |
+| HL7v2                    | FHIR                                 | Direction |
+| ------------------------ | ------------------------------------ | --------- |
+| `ADT^A01` (admission)    | `Patient` + `Encounter`              | both      |
+| `ADT^A08` (update)       | `Patient` + `Encounter`              | both      |
+| `ORU^R01` (lab result)   | `DiagnosticReport` + `Observation[]` | both      |
+| `ORM^O01` (order)        | `ServiceRequest`                     | both      |
+| `VXU^V04` (immunization) | `Immunization`                       | both      |
+| `SIU^S12` (appointment)  | `Appointment`                        | both      |
+| `OML^O21` (lab order)    | `ServiceRequest` + `Specimen`        | both      |
+| `MDM^T02` (document)     | `DocumentReference`                  | both      |
 
 Full field-level detail is in [`docs/MAPPING.md`](./docs/MAPPING.md).
 
@@ -61,7 +65,7 @@ Requires Node.js 18+.
 git clone https://github.com/heyitskundan/hl7-fhir-translator.git
 cd hl7-fhir-translator
 npm install
-npm test               # 45 tests: parser, all four message-type mappings (both directions), detection, CLI
+npm test               # 129 tests: parser, all eight message-type mappings (both directions), a docs/code mapping audit, detection, CLI
 npm run build           # builds packages/core, then client
 npm run dev              # runs the browser demo at http://localhost:5173
 ```
