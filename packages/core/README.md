@@ -132,20 +132,25 @@ input to the right handler in a pipeline. Full shape in [API reference](#api-ref
 
 ## Supported message types
 
-| HL7v2                  | FHIR                                 | Direction |
-| ---------------------- | ------------------------------------ | --------- |
-| `ADT^A01` (admission)  | `Patient` + `Encounter`              | both      |
-| `ADT^A08` (update)     | `Patient` + `Encounter`              | both      |
-| `ORU^R01` (lab result) | `DiagnosticReport` + `Observation[]` | both      |
-| `ORM^O01` (order)      | `ServiceRequest`                     | both      |
+| HL7v2                    | FHIR                                 | Direction |
+| ------------------------ | ------------------------------------ | --------- |
+| `ADT^A01` (admission)    | `Patient` + `Encounter`              | both      |
+| `ADT^A08` (update)       | `Patient` + `Encounter`              | both      |
+| `ORU^R01` (lab result)   | `DiagnosticReport` + `Observation[]` | both      |
+| `ORM^O01` (order)        | `ServiceRequest`                     | both      |
+| `VXU^V04` (immunization) | `Immunization`                       | both      |
+| `SIU^S12` (appointment)  | `Appointment`                        | both      |
+| `OML^O21` (lab order)    | `ServiceRequest` + `Specimen`        | both      |
+| `MDM^T02` (document)     | `DocumentReference`                  | both      |
 
 This list is also available at runtime as `SUPPORTED_MESSAGE_TYPES` (see below) so you can
 check support programmatically instead of hardcoding it. An unsupported message type
 raises `FhirValidationError` with the specific type it couldn't handle; an unmapped
 segment within an otherwise-supported message is reported in `warnings[]`. Codes are
-carried through using LOINC (lab/order codes), HL7 v2-0203 (identifier type), HL7 v3
-ActCode (encounter class), and HL7 v3 ObservationInterpretation (abnormal flags). Full
-field-by-field detail is in [`docs/MAPPING.md`](../../docs/MAPPING.md).
+carried through using LOINC (lab/order/document-type codes), CVX (vaccine codes), HL7
+v2-0203 (identifier type), HL7 v2-0276 (appointment type), HL7 v2-0487 (specimen type),
+HL7 v3 ActCode (encounter class), and HL7 v3 ObservationInterpretation (abnormal flags).
+Full field-by-field detail is in [`docs/MAPPING.md`](../../docs/MAPPING.md).
 
 ## API reference
 
@@ -167,8 +172,11 @@ message type, missing a required segment like `PID`).
 
 Parses a FHIR R4 resource or `Bundle` (JSON string) and returns an HL7v2 message string. A
 bare resource is accepted and wrapped in a `Bundle` automatically. The target HL7v2
-message type is inferred from which resource types are present: `ServiceRequest` →
-`ORM^O01`, `DiagnosticReport` → `ORU^R01`, otherwise `Patient` → `ADT^A01`.
+message type is inferred from which resource types are present, checked in this order
+(most specific first, since some resource types are shared by more than one message
+type): `Specimen` → `OML^O21`, else `ServiceRequest` → `ORM^O01`, else `DiagnosticReport`
+→ `ORU^R01`, else `Immunization` → `VXU^V04`, else `Appointment` → `SIU^S12`, else
+`DocumentReference` → `MDM^T02`, otherwise `Patient` → `ADT^A01`.
 
 Throws `FhirValidationError` for invalid JSON or a bundle missing the resource type needed
 to determine the target message.
@@ -499,7 +507,7 @@ segment/resource.
 git clone https://github.com/heyitskundan/hl7-fhir-translator.git
 cd hl7-fhir-translator
 npm install
-npm test -w packages/core          # 45 tests: parser, all four mapping directions, detection, CLI
+npm test -w packages/core          # 143 tests: parser, all eight mapping directions, a docs/code mapping audit, detection, CLI
 npm run build -w packages/core      # tsup: dual ESM+CJS + type defs + the CLI binary
 ```
 

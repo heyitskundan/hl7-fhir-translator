@@ -48,7 +48,7 @@ export function CodeBlock({ code, lang = "text" }: { code: string; lang?: Lang }
           {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <pre className="overflow-x-auto leading-relaxed" dangerouslySetInnerHTML={{ __html: html }} />
+      <pre className="overflow-x-auto pb-3 leading-relaxed" dangerouslySetInnerHTML={{ __html: html }} />
     </div>
   );
 }

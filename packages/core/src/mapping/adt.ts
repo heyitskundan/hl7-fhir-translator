@@ -6,6 +6,7 @@ import { FhirValidationError } from "../fhir/types.js";
 import {
   CODE_SYSTEMS,
   MappingTrail,
+  buildMsh,
   fhirDateTimeToHl7,
   fhirEncounterClassToHl7,
   fhirGenderToHl7,
@@ -185,19 +186,7 @@ export function fhirToAdt(bundle: Bundle, messageTypeTrigger: string): { message
   const controlId = nextMessageControlId();
   const now = nowHl7DateTime();
 
-  const msh = segment("MSH", {
-    2: field("^~\\&"),
-    3: field("FHIR-TRANSLATOR"),
-    4: field("HL7FHIR"),
-    5: field("HIS"),
-    6: field("HOSP"),
-    7: field(now),
-    9: field("ADT", messageTypeTrigger),
-    10: field(controlId),
-    11: field("P"),
-    12: field("2.5"),
-  });
-  trail.add("Bundle.type", "MSH-9", `ADT^${messageTypeTrigger}`);
+  const msh = buildMsh(trail, "ADT", messageTypeTrigger, controlId, now);
 
   const evnTime = encounter?.period?.start ? fhirDateTimeToHl7(encounter.period.start) : now;
   const evn = segment("EVN", { 1: field(messageTypeTrigger), 2: field(evnTime) });

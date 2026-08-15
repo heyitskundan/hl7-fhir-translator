@@ -22,7 +22,7 @@ seeing is a bug or the documented (if surprising) intent.
 Two common requests have a defined path already:
 
 - **A new message type** (e.g. `SIU^S12`, `VXU^V04`) — see
-  [Adding a new message type](./docs/MAPPING.md#7-adding-a-new-message-type) for the
+  [Adding a new message type](./docs/MAPPING.md#adding-a-new-message-type) for the
   pattern to follow. Open an issue naming the message type and, ideally, a real
   (de-identified) sample message before starting work, so the mapping table can be
   reviewed before code is.
@@ -39,7 +39,8 @@ translation library, agreeing on the target mapping table up front avoids rework
 git clone https://github.com/heyitskundan/hl7-fhir-translator.git
 cd hl7-fhir-translator
 npm install
-npm test               # 45 tests: parser, all four mapping directions, detection, CLI
+npm test               # 177 tests: 143 in packages/core (parser, all eight mapping directions,
+                        # a docs/code mapping audit, detection, CLI) + 34 in client (UI/demo)
 npm run build           # packages/core (dual ESM+CJS via tsup) + client
 npm run dev              # browser demo at http://localhost:5173
 ```

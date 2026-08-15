@@ -83,12 +83,12 @@ export function OutputPane({ result, error }: Props) {
         )}
 
         {!error && result && tab === "translated" && (
-          <div className="relative h-full">
-            <div className="absolute top-3 right-3">
+          <div className="flex h-full flex-col">
+            <div className="flex shrink-0 justify-end p-2">
               <CopyButton text={result.translated} />
             </div>
             <pre
-              className="h-full overflow-auto p-4 font-mono text-base leading-relaxed"
+              className="min-h-0 flex-1 overflow-auto px-4 pb-4 font-mono text-base leading-relaxed"
               style={{ color: "var(--color-text)" }}
               dangerouslySetInnerHTML={{ __html: highlighted }}
             />
