@@ -6,6 +6,12 @@
  * A few fields below (`meta`, `Identifier.use`, `HumanName.use`) are part of the
  * standard FHIR shape but aren't currently read or written by any mapper — they're
  * kept for shape-completeness against the FHIR spec, not because this package uses them.
+ *
+ * Adding a new resource type (e.g. for a new segment mapping): 1) add its interface here,
+ * scoped the same way — only the fields a mapper actually reads or writes, each with a
+ * one-line comment noting which message type/segment produces or consumes it; 2) widen the
+ * `FhirResource` union below to include it. That's the whole pattern; nothing else in this
+ * file needs to change per resource type.
  */
 
 /** A single code from a terminology system (e.g. LOINC, HL7 v3 ActCode). */

@@ -24,7 +24,7 @@ export function SampleMessages({ direction, onSelect }: Props) {
           if (!Number.isNaN(index)) onSelect(index);
           e.target.value = "";
         }}
-        className="appearance-none py-1.5 pr-7 pl-3 text-sm"
+        className="w-40 appearance-none py-1.5 pr-7 pl-3 text-sm"
         style={{
           background: "var(--color-surface)",
           color: "var(--color-text)",

@@ -35,21 +35,64 @@ export function isSupportedMessageType(category: string, trigger: string): boole
 }
 
 /**
+ * One reverse-routing rule: if every resource type in `requires` is present in the
+ * bundle, route to `category` (and `trigger`, for message types where more than one
+ * trigger shares the same resource shape — reverse translation can't distinguish them
+ * further, so it picks a default).
+ *
+ * `ROUTING_RULES` is checked top to bottom, first match wins. Ordering invariant,
+ * enforced by `assertRoutingRulesAreOrderedBySpecificity` below (checked once at module
+ * load, not per call): if rule A's `requires` set is a subset of rule B's `requires`
+ * set, B must appear before A. This is what "most specific first" meant in the old
+ * if/else chain — encoding it as a checked invariant over resource-type *sets* (rather
+ * than a single resource type per branch) means a message type that shares more than one
+ * resource type with another (e.g. a future type producing both `ServiceRequest` and
+ * `MedicationRequest`) can be disambiguated by requiring both, without the ordering
+ * becoming a guessing game as more rules are added.
+ */
+interface RoutingRule {
+  category: string;
+  trigger?: string;
+  requires: readonly string[];
+}
+
+const ROUTING_RULES: readonly RoutingRule[] = [
+  { category: "OML", requires: ["Specimen"] },
+  { category: "ORM", requires: ["ServiceRequest"] },
+  { category: "ORU", requires: ["DiagnosticReport"] },
+  { category: "VXU", requires: ["Immunization"] },
+  { category: "SIU", requires: ["Appointment"] },
+  { category: "MDM", requires: ["DocumentReference"] },
+  { category: "ADT", trigger: "A01", requires: ["Patient"] },
+];
+
+function assertRoutingRulesAreOrderedBySpecificity(rules: readonly RoutingRule[]): void {
+  for (let i = 0; i < rules.length; i++) {
+    for (let j = i + 1; j < rules.length; j++) {
+      const earlier = new Set(rules[i]!.requires);
+      const later = rules[j]!.requires;
+      const laterIsMoreSpecific = later.length > earlier.size && later.every((t) => earlier.has(t));
+      if (laterIsMoreSpecific) {
+        throw new Error(
+          `ROUTING_RULES ordering bug: rule for "${rules[j]!.category}" (requires: ${later.join(", ")}) is more specific than ` +
+            `earlier rule for "${rules[i]!.category}" (requires: ${[...earlier].join(", ")}) but appears after it — it would never match.`,
+        );
+      }
+    }
+  }
+}
+assertRoutingRulesAreOrderedBySpecificity(ROUTING_RULES);
+
+/**
  * Pure, non-throwing lookup from the FHIR resource types present in a bundle to the
  * HL7v2 message type they'd translate to. Shared by the throwing router below and by
  * `inspectInput` (../inspect.js), which needs the same rule without an exception on a
- * miss. Checked in priority order, most-specific first, since some resource types
- * (e.g. `ServiceRequest`) are shared by more than one message type.
+ * miss.
  */
 export function detectTargetMessageType(resourceTypes: ReadonlySet<string>): SupportedMessageType | undefined {
-  if (resourceTypes.has("Specimen")) return SUPPORTED_MESSAGE_TYPES.find((t) => t.category === "OML");
-  if (resourceTypes.has("ServiceRequest")) return SUPPORTED_MESSAGE_TYPES.find((t) => t.category === "ORM");
-  if (resourceTypes.has("DiagnosticReport")) return SUPPORTED_MESSAGE_TYPES.find((t) => t.category === "ORU");
-  if (resourceTypes.has("Immunization")) return SUPPORTED_MESSAGE_TYPES.find((t) => t.category === "VXU");
-  if (resourceTypes.has("Appointment")) return SUPPORTED_MESSAGE_TYPES.find((t) => t.category === "SIU");
-  if (resourceTypes.has("DocumentReference")) return SUPPORTED_MESSAGE_TYPES.find((t) => t.category === "MDM");
-  if (resourceTypes.has("Patient")) return SUPPORTED_MESSAGE_TYPES.find((t) => t.category === "ADT" && t.trigger === "A01");
-  return undefined;
+  const rule = ROUTING_RULES.find((r) => r.requires.every((t) => resourceTypes.has(t)));
+  if (!rule) return undefined;
+  return SUPPORTED_MESSAGE_TYPES.find((t) => t.category === rule.category && (rule.trigger === undefined || t.trigger === rule.trigger));
 }
 
 /** Routes a parsed HL7v2 message to the mapper for its MSH-9 message type. */

@@ -33,7 +33,14 @@ export const dataMappingRail: RailItem[] = [
   { href: "#adt", label: "ADT → Patient/Encounter" },
   { href: "#oru", label: "ORU → Diagnostic/Observation" },
   { href: "#orm", label: "ORM → ServiceRequest" },
+  { href: "#vxu", label: "VXU → Immunization" },
+  { href: "#siu", label: "SIU → Appointment" },
+  { href: "#oml", label: "OML → ServiceRequest/Specimen" },
+  { href: "#mdm", label: "MDM → DocumentReference" },
   { href: "#terminology", label: "Terminology systems" },
 ];
 
-export const changelogRail: RailItem[] = [{ href: "#v0-1-0", label: "v0.1.0" }];
+export const changelogRail: RailItem[] = [
+  { href: "#v0-2-0", label: "v0.2.0" },
+  { href: "#v0-1-0", label: "v0.1.0" },
+];

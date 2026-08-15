@@ -8,27 +8,31 @@ to update alongside the code. Covers the eight message types this package suppor
 
 ## Contents
 
-1. [Versions](#1-versions)
-2. [Conventions used in this document](#2-conventions-used-in-this-document)
-3. [Terminology systems used](#3-terminology-systems-used)
-4. [ADT^A01 (admission) and ADT^A08 (update)](#4-adta01-admission-and-adta08-update)
-5. [ORU^R01 (unsolicited lab result)](#5-orur01-unsolicited-lab-result)
-6. [ORM^O01 (general order)](#6-ormo01-general-order)
-7. [VXU^V04 (immunization record update)](#7-vxuv04-immunization-record-update)
-8. [SIU^S12 (appointment scheduling)](#8-sius12-appointment-scheduling)
-9. [OML^O21 (laboratory order)](#9-omlo21-laboratory-order)
-10. [MDM^T02 (document management)](#10-mdmt02-document-management)
-11. [Adding a new message type](#11-adding-a-new-message-type)
-12. [Detection rules (`inspectInput`)](#12-detection-rules-inspectinput)
+Headings below are stable — they carry no leading section number, so inserting a new
+message type never requires renumbering anything else in this document or in
+`packages/core/test/mapping-audit.test.ts`, which matches sections by heading text alone.
 
-## 1. Versions
+- [Versions](#versions)
+- [Conventions used in this document](#conventions-used-in-this-document)
+- [Terminology systems used](#terminology-systems-used)
+- [ADT^A01 (admission) and ADT^A08 (update)](#adta01-admission-and-adta08-update)
+- [ORU^R01 (unsolicited lab result)](#orur01-unsolicited-lab-result)
+- [ORM^O01 (general order)](#ormo01-general-order)
+- [VXU^V04 (immunization record update)](#vxuv04-immunization-record-update)
+- [SIU^S12 (appointment scheduling)](#sius12-appointment-scheduling)
+- [OML^O21 (laboratory order)](#omlo21-laboratory-order)
+- [MDM^T02 (document management)](#mdmt02-document-management)
+- [Adding a new message type](#adding-a-new-message-type)
+- [Detection rules (`inspectInput`)](#detection-rules-inspectinput)
+
+## Versions
 
 - **HL7v2**: 2.5 pipe-delimited ER7 messages (segments separated by `\r`, `\n`, or
   `\r\n`; the parser is otherwise HL7v2.x-version-agnostic — it reads delimiters from
   MSH-1/MSH-2 rather than assuming 2.5-specific behavior).
 - **FHIR**: R4.
 
-## 2. Conventions used in this document
+## Conventions used in this document
 
 - `SEGMENT-N` refers to the Nth field of a segment, 1-indexed exactly as in the HL7v2
   spec (e.g. `PID-5` is the 5th field of PID). `SEGMENT-N.C` refers to the Cth component
@@ -44,7 +48,7 @@ to update alongside the code. Covers the eight message types this package suppor
   (bad delimiters, no `MSH`) throws `Hl7ParseError`. Both carry a specific `.message` and
   optional `.context`.
 
-## 3. Terminology systems used
+## Terminology systems used
 
 | System                               | URL                                                                  | Used for                                                   |
 | ------------------------------------ | -------------------------------------------------------------------- | ---------------------------------------------------------- |
@@ -63,7 +67,7 @@ source — e.g. a LOINC code found in `OBX-3.1` is copied straight into the outp
 
 ---
 
-## 4. ADT^A01 (admission) and ADT^A08 (update)
+## ADT^A01 (admission) and ADT^A08 (update)
 
 Both trigger events use the same segment set and mapping — the difference is purely
 `MSH-9`'s trigger code and, clinically, what the update represents. The package treats
@@ -72,7 +76,7 @@ them identically.
 **Segments read**: `MSH`, `EVN`, `PID`, `PV1`
 **Resources produced**: `Patient`, `Encounter` (omitted if no `PV1` is present)
 
-### 4.1 Forward: HL7v2 → FHIR
+### Forward: HL7v2 → FHIR
 
 | HL7v2 field | FHIR path                                     | Notes                                                             |
 | ----------- | --------------------------------------------- | ----------------------------------------------------------------- |
@@ -100,7 +104,7 @@ them identically.
 discharge status from ADT^A01/A08 alone). `Encounter.participant[0].type` is always set
 to `ATND` (attending) since that's the only doctor field mapped.
 
-### 4.2 Reverse: FHIR → HL7v2
+### Reverse: FHIR → HL7v2
 
 | FHIR path                                     | HL7v2 field           | Notes                                                                                                  |
 | --------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------------------------ |
@@ -137,14 +141,14 @@ synthesized fields, since FHIR has no equivalent:
 | `EVN-1`             | `A01`                                                       | Matches `MSH-9`'s trigger                                                                                                      |
 | `EVN-2`             | `Encounter.period.start` if present, else current timestamp |                                                                                                                                |
 
-### 4.3 Not mapped
+### Not mapped
 
 Any segment other than `MSH`/`EVN`/`PID`/`PV1` present in the input (e.g. `NK1`, `PV2`,
 `AL1`, `DG1`, `IN1`) is reported in `warnings[]` and otherwise ignored. In the reverse
 direction, any FHIR resource in the bundle other than `Patient`/`Encounter` is likewise
 warned about and skipped.
 
-### 4.4 Worked example
+### Worked example
 
 Input (`samples/adt_a01.hl7`):
 
@@ -251,12 +255,12 @@ Output (`translateHl7ToFhir` — the complete Bundle, both entries):
 
 ---
 
-## 5. ORU^R01 (unsolicited lab result)
+## ORU^R01 (unsolicited lab result)
 
 **Segments read**: `MSH`, `PID`, `OBR` (one panel), `OBX` (one or more results)
 **Resources produced**: `Patient`, `DiagnosticReport`, one `Observation` per `OBX`
 
-### 5.1 Forward: HL7v2 → FHIR
+### Forward: HL7v2 → FHIR
 
 | HL7v2 field | FHIR path                                   | Notes                                                          |
 | ----------- | ------------------------------------------- | -------------------------------------------------------------- |
@@ -295,7 +299,7 @@ doesn't map `OBR-25`/`OBX-11` result-status codes to FHIR's fuller status vocabu
 `DiagnosticReport.result[]` is populated with a `Reference` to every `Observation`
 produced from the message, in `OBX` order.
 
-### 5.2 Reverse: FHIR → HL7v2
+### Reverse: FHIR → HL7v2
 
 | FHIR path                                   | HL7v2 field | Notes                                                    |
 | ------------------------------------------- | ----------- | -------------------------------------------------------- |
@@ -342,13 +346,13 @@ Panel- and result-level fields:
 | `MSH-10`            | Generated control ID (`TRX<timestamp><counter>`) |                                                  |
 | `MSH-11` / `MSH-12` | `P` / `2.5`                                      | Processing ID, version ID                        |
 
-### 5.3 Not mapped
+### Not mapped
 
 Any segment other than `MSH`/`PID`/`OBR`/`OBX` is warned about and skipped. A message with
 zero `OBX` segments throws `FhirValidationError` rather than producing an empty report —
 an ORU with no results is treated as malformed input, not a valid empty translation.
 
-### 5.4 Worked example
+### Worked example
 
 Input (`samples/oru_r01.hl7`) has two `OBX` results (Hemoglobin, Hematocrit); output is a
 4-entry Bundle: `Patient`, `DiagnosticReport` (referencing both), and two `Observation`
@@ -405,12 +409,12 @@ complete JSON; abbreviated, the first Observation is:
 
 ---
 
-## 6. ORM^O01 (general order)
+## ORM^O01 (general order)
 
 **Segments read**: `MSH`, `PID`, `ORC`, `OBR`
 **Resources produced**: `Patient`, `ServiceRequest`
 
-### 6.1 Forward: HL7v2 → FHIR
+### Forward: HL7v2 → FHIR
 
 | HL7v2 field | FHIR path                                   | Notes                                                          |
 | ----------- | ------------------------------------------- | -------------------------------------------------------------- |
@@ -441,7 +445,7 @@ Order fields:
 
 `ServiceRequest.intent` is always `order`.
 
-### 6.2 Reverse: FHIR → HL7v2
+### Reverse: FHIR → HL7v2
 
 | FHIR path                                   | HL7v2 field | Notes                                                    |
 | ------------------------------------------- | ----------- | -------------------------------------------------------- |
@@ -482,11 +486,11 @@ Order fields:
 | `MSH-10`            | Generated control ID (`TRX<timestamp><counter>`) |                                                  |
 | `MSH-11` / `MSH-12` | `P` / `2.5`                                      | Processing ID, version ID                        |
 
-### 6.3 Not mapped
+### Not mapped
 
 Any segment other than `MSH`/`PID`/`ORC`/`OBR` is warned about and skipped.
 
-### 6.4 Worked example
+### Worked example
 
 Input (`samples/orm_o01.hl7`) produces a 2-entry Bundle:
 
@@ -519,14 +523,14 @@ Input (`samples/orm_o01.hl7`) produces a 2-entry Bundle:
 
 ---
 
-## 7. VXU^V04 (immunization record update)
+## VXU^V04 (immunization record update)
 
 **Segments read**: `MSH`, `PID`, `RXA`
 **Resources produced**: `Patient`, `Immunization`
 
-### 7.1 Forward: HL7v2 → FHIR
+### Forward: HL7v2 → FHIR
 
-Patient fields follow the same `PID` table as §4.1/§5.1/§6.1 above. Immunization fields:
+Patient fields follow the same `PID` table as the ADT/ORU/ORM forward tables above. Immunization fields:
 
 | HL7v2 field | FHIR path                                                | Notes                                                         |
 | ----------- | -------------------------------------------------------- | ------------------------------------------------------------- |
@@ -544,7 +548,7 @@ Patient fields follow the same `PID` table as §4.1/§5.1/§6.1 above. Immunizat
 
 `Immunization.patient` is always a reference to the Patient built from `PID`.
 
-### 7.2 Reverse: FHIR → HL7v2
+### Reverse: FHIR → HL7v2
 
 | FHIR path                                 | HL7v2 field     | Notes                                                                                    |
 | ----------------------------------------- | --------------- | ---------------------------------------------------------------------------------------- |
@@ -558,14 +562,14 @@ Patient fields follow the same `PID` table as §4.1/§5.1/§6.1 above. Immunizat
 | `Immunization.status`                     | `RXA-20`        | Inverse of the forward table: `completed`→`CP`, `not-done`→`RE`, `entered-in-error`→`NA` |
 
 `RXA-1`/`RXA-2` (give/administration sub-ID counters) are always synthesized as `0`/`1`.
-`MSH`/`PID` synthesis follows the same rules as §4.2.
+`MSH`/`PID` synthesis follows the same rules as ADT's reverse table above.
 
-### 7.3 Not mapped
+### Not mapped
 
 Any segment other than `MSH`/`PID`/`RXA` (e.g. `ORC`, `RXR`, `OBX` vaccine-funding/eligibility
 observations) is warned about and skipped.
 
-### 7.4 Worked example
+### Worked example
 
 Input (`samples/vxu_v04.hl7`):
 
@@ -617,14 +621,14 @@ Output (`translateHl7ToFhir` — the `Immunization` entry):
 
 ---
 
-## 8. SIU^S12 (appointment scheduling)
+## SIU^S12 (appointment scheduling)
 
 **Segments read**: `MSH`, `SCH`, `PID`, `AIL` (location), `AIP` (personnel)
 **Resources produced**: `Patient`, `Appointment`
 
-### 8.1 Forward: HL7v2 → FHIR
+### Forward: HL7v2 → FHIR
 
-Patient fields follow the same `PID` table as §4.1 above. Appointment fields:
+Patient fields follow the same `PID` table as the ADT forward table above. Appointment fields:
 
 | HL7v2 field | FHIR path                                                   | Notes                                                                                                   |
 | ----------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
@@ -645,7 +649,7 @@ Patient fields follow the same `PID` table as §4.1 above. Appointment fields:
 as additional participants, also `status: "accepted"` — this package doesn't track pending
 invitations.
 
-### 8.2 Reverse: FHIR → HL7v2
+### Reverse: FHIR → HL7v2
 
 | FHIR path                                  | HL7v2 field      | Notes                                                                                                                                                                                                                         |
 | ------------------------------------------ | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -658,15 +662,15 @@ invitations.
 | `Appointment.participant[1].actor.display` | `AIL-3.2`        | The first non-patient participant is written back as the location. Any further participant (e.g. a practitioner) can't be distinguished from a location by shape alone — it's warned about and skipped rather than guessed at |
 
 `SCH-1`/`SCH-2` (placer/filler appointment ID) are synthesized from the generated control
-ID. `MSH`/`PID` synthesis follows the same rules as §4.2.
+ID. `MSH`/`PID` synthesis follows the same rules as ADT's reverse table above.
 
-### 8.3 Not mapped
+### Not mapped
 
 Any segment other than `MSH`/`SCH`/`PID`/`AIL`/`AIP` (e.g. `AIS`, `AIG`, `NTE`) is warned
 about and skipped. A second or later non-patient `Appointment.participant` is warned about
-on the reverse direction, per §8.2.
+on the reverse direction, per the reverse table above.
 
-### 8.4 Worked example
+### Worked example
 
 Input (`samples/siu_s12.hl7`):
 
@@ -714,18 +718,18 @@ Output (`translateHl7ToFhir` — the `Appointment` entry):
 
 ---
 
-## 9. OML^O21 (laboratory order)
+## OML^O21 (laboratory order)
 
-OML^O21 is what distinguishes a lab order from a general order (§6, ORM^O01): it carries a
+OML^O21 is what distinguishes a lab order from a general order (see ORM^O01 above): it carries a
 `SPM` (specimen) segment. `registry.ts` uses the presence of a `Specimen` resource to route
 a FHIR bundle back to this mapper instead of ORM's.
 
 **Segments read**: `MSH`, `PID`, `ORC`, `OBR`, `SPM`
 **Resources produced**: `Patient`, `ServiceRequest`, `Specimen`
 
-### 9.1 Forward: HL7v2 → FHIR
+### Forward: HL7v2 → FHIR
 
-Patient and order fields follow the same `PID`/`ORC`/`OBR` tables as §6.1 above (`ORC-1` →
+Patient and order fields follow the same `PID`/`ORC`/`OBR` tables as ORM^O01's forward table above (`ORC-1` →
 `ServiceRequest.status`, `ORC-9` → `authoredOn`, `ORC-12` → `requester.display`, `OBR-4` →
 `code`, `OBR-7` → `occurrenceDateTime`). Specimen fields:
 
@@ -738,7 +742,7 @@ Patient and order fields follow the same `PID`/`ORC`/`OBR` tables as §6.1 above
 `Specimen.subject` references the same Patient as the ServiceRequest; `Specimen.request[0]`
 references the ServiceRequest built from `ORC`/`OBR`.
 
-### 9.2 Reverse: FHIR → HL7v2
+### Reverse: FHIR → HL7v2
 
 | FHIR path                               | HL7v2 field | Notes                                                                                                       |
 | --------------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------- |
@@ -746,15 +750,15 @@ references the ServiceRequest built from `ORC`/`OBR`.
 | `Specimen.collection.collectedDateTime` | `SPM-17`    |                                                                                                             |
 | _(constant)_                            | `SPM-2`     | The same synthesized placer order number as `ORC-2`/`OBR-2` is written to `SPM-2`, keeping all three linked |
 
-`ServiceRequest` fields are written back exactly as in §6.2. `MSH`/`PID` synthesis follows
-the same rules as §4.2.
+`ServiceRequest` fields are written back exactly as in ORM^O01's reverse table above. `MSH`/`PID` synthesis follows
+the same rules as ADT's reverse table above.
 
-### 9.3 Not mapped
+### Not mapped
 
 Any segment other than `MSH`/`PID`/`ORC`/`OBR`/`SPM` (e.g. `TQ1`, `DG1`, `NTE`) is warned
 about and skipped.
 
-### 9.4 Worked example
+### Worked example
 
 Input (`samples/oml_o21.hl7`) produces a 3-entry Bundle: `Patient`, `ServiceRequest`, and
 `Specimen`:
@@ -798,14 +802,14 @@ Input (`samples/oml_o21.hl7`) produces a 3-entry Bundle: `Patient`, `ServiceRequ
 
 ---
 
-## 10. MDM^T02 (document management)
+## MDM^T02 (document management)
 
 **Segments read**: `MSH`, `EVN`, `PID`, `TXA`
 **Resources produced**: `Patient`, `DocumentReference`
 
-### 10.1 Forward: HL7v2 → FHIR
+### Forward: HL7v2 → FHIR
 
-Patient fields follow the same `PID` table as §4.1 above. Document fields:
+Patient fields follow the same `PID` table as the ADT forward table above. Document fields:
 
 | HL7v2 field | FHIR path                                              | Notes                                                                              |
 | ----------- | ------------------------------------------------------ | ---------------------------------------------------------------------------------- |
@@ -824,7 +828,7 @@ since TXA carries no content-type field; `.title` is set from `TXA-2`'s display.
 `TXA` segment carries no actual document bytes (those travel separately, e.g. as base64 in
 an `OBX`), so `content[0].attachment` never has a `data` field — only its metadata.
 
-### 10.2 Reverse: FHIR → HL7v2
+### Reverse: FHIR → HL7v2
 
 | FHIR path                                  | HL7v2 field | Notes                                                                                         |
 | ------------------------------------------ | ----------- | --------------------------------------------------------------------------------------------- |
@@ -834,15 +838,15 @@ an `OBX`), so `content[0].attachment` never has a `data` field — only its meta
 | `DocumentReference.masterIdentifier.value` | `TXA-12`    |                                                                                               |
 | `DocumentReference.docStatus`              | `TXA-17`    | Inverse of the forward table: `final`→`AU`, `preliminary`→`IP`, `amended`→`TR`; absent → `IP` |
 
-`EVN-1`/`EVN-2` are synthesized the same way as ADT's (§4.2). `MSH`/`PID` synthesis follows
-the same rules as §4.2.
+`EVN-1`/`EVN-2` are synthesized the same way as ADT's (reverse table above). `MSH`/`PID` synthesis follows
+the same rules as ADT's reverse table above.
 
-### 10.3 Not mapped
+### Not mapped
 
 Any segment other than `MSH`/`EVN`/`PID`/`TXA` (e.g. `OBX` carrying the actual document
 content, `PV1`) is warned about and skipped.
 
-### 10.4 Worked example
+### Worked example
 
 Input (`samples/mdm_t02.hl7`):
 
@@ -883,7 +887,7 @@ Output (`translateHl7ToFhir` — the `DocumentReference` entry):
 
 ---
 
-## 11. Adding a new message type
+## Adding a new message type
 
 The mapping tables above are implemented, one file per message type, in
 [`packages/core/src/mapping/`](../packages/core/src/mapping) (`adt.ts`, `oru.ts`,
@@ -904,7 +908,7 @@ drifts from the implementation fails CI instead of silently going stale.
 
 ---
 
-## 12. Detection rules (`inspectInput`)
+## Detection rules (`inspectInput`)
 
 `inspectInput(input)` (implemented in
 [`packages/core/src/inspect.ts`](../packages/core/src/inspect.ts)) identifies what a
@@ -916,7 +920,7 @@ use, exposed as a first-class API rather than duplicated. Full API shape is docu
 this section documents the exact rules it applies, since those rules directly determine
 which mapper handles a given input.
 
-### 8.1 Direction: HL7v2 vs. FHIR vs. unknown
+### Direction: HL7v2 vs. FHIR vs. unknown
 
 Applied to the input after trimming leading/trailing whitespace, in this order:
 
@@ -931,7 +935,7 @@ Applied to the input after trimming leading/trailing whitespace, in this order:
 This is a shape check, not a validity check — step 1 doesn't require the rest of the
 message to parse correctly; step 2 doesn't require the JSON to be well-formed.
 
-### 8.2 HL7v2 message type
+### HL7v2 message type
 
 Once direction is `hl7ToFhir`, `inspectInput` attempts a full `parseHl7Message` (the same
 parser translation uses):
@@ -953,7 +957,7 @@ real HL7v2 message, but no mapper in this package handles `category^trigger` yet
 signal a caller should use to short-circuit before calling `translateHl7ToFhir` and
 hitting its `FhirValidationError` instead.
 
-### 8.3 FHIR resource kind
+### FHIR resource kind
 
 Once direction is `fhirToHl7`:
 

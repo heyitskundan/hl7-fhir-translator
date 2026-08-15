@@ -14,32 +14,32 @@ import { translateHl7ToFhir } from "../src/translate.js";
 const DOC = readFileSync("../../docs/MAPPING.md", "utf8");
 
 interface MessageTypeAudit {
-  heading: string; // exact "## N. ..." heading text as it appears in the doc
+  heading: string; // exact "## ..." heading text as it appears in the doc — no leading section number, so this stays stable regardless of where the section sits in the file
   sampleFile: string;
 }
 
 const AUDITS: MessageTypeAudit[] = [
-  { heading: "## 4. ADT^A01 (admission) and ADT^A08 (update)", sampleFile: "adt_a01.hl7" },
-  { heading: "## 5. ORU^R01 (unsolicited lab result)", sampleFile: "oru_r01.hl7" },
-  { heading: "## 6. ORM^O01 (general order)", sampleFile: "orm_o01.hl7" },
-  { heading: "## 7. VXU^V04 (immunization record update)", sampleFile: "vxu_v04.hl7" },
-  { heading: "## 8. SIU^S12 (appointment scheduling)", sampleFile: "siu_s12.hl7" },
-  { heading: "## 9. OML^O21 (laboratory order)", sampleFile: "oml_o21.hl7" },
-  { heading: "## 10. MDM^T02 (document management)", sampleFile: "mdm_t02.hl7" },
+  { heading: "## ADT^A01 (admission) and ADT^A08 (update)", sampleFile: "adt_a01.hl7" },
+  { heading: "## ORU^R01 (unsolicited lab result)", sampleFile: "oru_r01.hl7" },
+  { heading: "## ORM^O01 (general order)", sampleFile: "orm_o01.hl7" },
+  { heading: "## VXU^V04 (immunization record update)", sampleFile: "vxu_v04.hl7" },
+  { heading: "## SIU^S12 (appointment scheduling)", sampleFile: "siu_s12.hl7" },
+  { heading: "## OML^O21 (laboratory order)", sampleFile: "oml_o21.hl7" },
+  { heading: "## MDM^T02 (document management)", sampleFile: "mdm_t02.hl7" },
 ];
 
-/** Extracts the text between a `## N. ...` heading and the next `## ` heading (or end of doc). */
+/** Extracts the text between a `## ...` heading and the next `## ` heading (or end of doc). */
 function sectionText(doc: string, heading: string): string {
   const start = doc.indexOf(heading);
   if (start === -1) throw new Error(`Heading not found in docs/MAPPING.md: "${heading}"`);
   const rest = doc.slice(start + heading.length);
-  const nextHeadingOffset = rest.search(/\n## \d/);
+  const nextHeadingOffset = rest.search(/\n## /);
   return nextHeadingOffset === -1 ? rest : rest.slice(0, nextHeadingOffset);
 }
 
 /** Extracts the "Forward: HL7v2 -> FHIR" subsection (one or more markdown tables) from a section's text. */
 function forwardSubsection(section: string): string {
-  const start = section.search(/### [\d.]+ Forward: HL7v2/);
+  const start = section.search(/### Forward: HL7v2/);
   if (start === -1) throw new Error("No 'Forward: HL7v2' subsection found");
   const rest = section.slice(start);
   const nextHeadingOffset = rest.slice(1).search(/\n###|\n---/);
@@ -68,7 +68,7 @@ function extractDocumentedFields(tableMarkdown: string): Set<string> {
 
 describe("docs/MAPPING.md forward tables match the mapper implementations", () => {
   for (const { heading, sampleFile } of AUDITS) {
-    it(`every documented forward field for ${heading.replace(/^## \d+\.\s*/, "")} appears in the actual mapping trail`, () => {
+    it(`every documented forward field for ${heading.replace(/^## /, "")} appears in the actual mapping trail`, () => {
       const documentedFields = extractDocumentedFields(forwardSubsection(sectionText(DOC, heading)));
       expect(documentedFields.size).toBeGreaterThan(0);
 
