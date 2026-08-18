@@ -4,7 +4,7 @@ This is the field-level specification for what [`hl7-fhir-translator`](../packag
 actually maps — every HL7v2 field it reads or writes, and exactly which FHIR R4 path it
 corresponds to. It exists so a reviewer can audit correctness without reading the
 implementation, and so a contributor extending the package has a single source of truth
-to update alongside the code. Covers the eight message types this package supports.
+to update alongside the code. Covers the 14 message types this package supports.
 
 ## Contents
 
@@ -15,7 +15,8 @@ message type never requires renumbering anything else in this document or in
 - [Versions](#versions)
 - [Conventions used in this document](#conventions-used-in-this-document)
 - [Terminology systems used](#terminology-systems-used)
-- [ADT^A01 (admission) and ADT^A08 (update)](#adta01-admission-and-adta08-update)
+- [ADT^A01, A02, A05, A06, A08, A09, A11](#adta01-a02-a05-a06-a08-a09-a11-admission-transfer-pre-admit-class-change-update-departure-tracking-cancel-admit)
+- [ADT^A17 (swap patients)](#adta17-swap-patients)
 - [ORU^R01 (unsolicited lab result)](#orur01-unsolicited-lab-result)
 - [ORM^O01 (general order)](#ormo01-general-order)
 - [VXU^V04 (immunization record update)](#vxuv04-immunization-record-update)
@@ -67,42 +68,58 @@ source — e.g. a LOINC code found in `OBX-3.1` is copied straight into the outp
 
 ---
 
-## ADT^A01 (admission) and ADT^A08 (update)
+## ADT^A01, A02, A05, A06, A08, A09, A11 (admission, transfer, pre-admit, class change, update, departure tracking, cancel admit)
 
-Both trigger events use the same segment set and mapping — the difference is purely
-`MSH-9`'s trigger code and, clinically, what the update represents. The package treats
-them identically.
+All seven of these trigger events use the same segment set and field mapping — the
+difference is purely `MSH-9`'s trigger code and, for three of them, `Encounter.status`
+(see below). `ADT^A17` (swap patients) is different enough structurally — two patients
+per message instead of one — that it gets its own subsection further down.
+
+**A note on where these trigger-specific rules come from**: the official v2-to-FHIR IG
+(hl7.org/fhir/uv/v2mappings)'s ADT mapping pages map segments to FHIR resource _types_
+(`PV1` → `Encounter`) the same way regardless of trigger — they specify no per-trigger
+`Encounter.status` rule (checked directly against the IG's `ADT_A02` and `ADT_A11` pages).
+The status choices below are this package's own interpretation of the HL7v2 spec's
+trigger-event semantics, not something the IG mandates.
 
 **Segments read**: `MSH`, `EVN`, `PID`, `PV1`
 **Resources produced**: `Patient`, `Encounter` (omitted if no `PV1` is present)
 
 ### Forward: HL7v2 → FHIR
 
-| HL7v2 field | FHIR path                                     | Notes                                                             |
-| ----------- | --------------------------------------------- | ----------------------------------------------------------------- |
-| `MSH-9`     | _(routing only)_                              | Selects this mapper; `ADT^A01` and `ADT^A08` both route here      |
-| `PID-3.1`   | `Patient.identifier[0].value`                 | Medical record number                                             |
-| `PID-3.4`   | `Patient.identifier[0].assigner.display`      | Assigning authority                                               |
-| `PID-3.5`   | `Patient.identifier[0].type.coding[0].code`   | Defaults to `MR` if absent                                        |
-| `PID-5.1`   | `Patient.name[0].family`                      |                                                                   |
-| `PID-5.2`   | `Patient.name[0].given[0]`                    |                                                                   |
-| `PID-5.3`   | `Patient.name[0].given[1]`                    | Middle name, appended to `given[]`                                |
-| `PID-7`     | `Patient.birthDate`                           | `YYYYMMDD` → `YYYY-MM-DD`                                         |
-| `PID-8`     | `Patient.gender`                              | `M`→`male`, `F`→`female`, `O`→`other`, anything else→`unknown`    |
-| `PID-11.1`  | `Patient.address[0].line[0]`                  | Street address                                                    |
-| `PID-11.3`  | `Patient.address[0].city`                     |                                                                   |
-| `PID-11.4`  | `Patient.address[0].state`                    |                                                                   |
-| `PID-11.5`  | `Patient.address[0].postalCode`               |                                                                   |
-| `PID-11.6`  | `Patient.address[0].country`                  |                                                                   |
-| `PV1-2`     | `Encounter.class`                             | `I`→`IMP`, `O`→`AMB`, `E`→`EMER`, else `UNK`; system = v3-ActCode |
-| `PV1-3.1`   | `Encounter.location[0].location.display`      | Point of care only (room/bed components not mapped)               |
-| `PV1-7.2`   | `Encounter.participant[0].individual.display` | Attending doctor family name                                      |
-| `PV1-7.3`   | `Encounter.participant[0].individual.display` | Attending doctor given name (joined as "given family")            |
-| `EVN-2`     | `Encounter.period.start`                      | Recorded event date/time                                          |
+| HL7v2 field | FHIR path                                     | Notes                                                                                 |
+| ----------- | --------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `MSH-9`     | _(routing only)_                              | Selects this mapper; any of `ADT^A01`/`A02`/`A05`/`A06`/`A08`/`A09`/`A11` routes here |
+| `PID-3.1`   | `Patient.identifier[0].value`                 | Medical record number                                                                 |
+| `PID-3.4`   | `Patient.identifier[0].assigner.display`      | Assigning authority                                                                   |
+| `PID-3.5`   | `Patient.identifier[0].type.coding[0].code`   | Defaults to `MR` if absent                                                            |
+| `PID-5.1`   | `Patient.name[0].family`                      |                                                                                       |
+| `PID-5.2`   | `Patient.name[0].given[0]`                    |                                                                                       |
+| `PID-5.3`   | `Patient.name[0].given[1]`                    | Middle name, appended to `given[]`                                                    |
+| `PID-7`     | `Patient.birthDate`                           | `YYYYMMDD` → `YYYY-MM-DD`                                                             |
+| `PID-8`     | `Patient.gender`                              | `M`→`male`, `F`→`female`, `O`→`other`, anything else→`unknown`                        |
+| `PID-11.1`  | `Patient.address[0].line[0]`                  | Street address                                                                        |
+| `PID-11.3`  | `Patient.address[0].city`                     |                                                                                       |
+| `PID-11.4`  | `Patient.address[0].state`                    |                                                                                       |
+| `PID-11.5`  | `Patient.address[0].postalCode`               |                                                                                       |
+| `PID-11.6`  | `Patient.address[0].country`                  |                                                                                       |
+| `PV1-2`     | `Encounter.class`                             | `I`→`IMP`, `O`→`AMB`, `E`→`EMER`, else `UNK`; system = v3-ActCode                     |
+| `PV1-3.1`   | `Encounter.location[0].location.display`      | Point of care only (room/bed components not mapped)                                   |
+| `PV1-7.2`   | `Encounter.participant[0].individual.display` | Attending doctor family name                                                          |
+| `PV1-7.3`   | `Encounter.participant[0].individual.display` | Attending doctor given name (joined as "given family")                                |
+| `EVN-2`     | `Encounter.period.start`                      | Recorded event date/time                                                              |
 
-`Encounter.status` is always set to `in-progress` (this package doesn't attempt to infer
-discharge status from ADT^A01/A08 alone). `Encounter.participant[0].type` is always set
-to `ATND` (attending) since that's the only doctor field mapped.
+`Encounter.status` is derived from `MSH-9`'s trigger:
+
+| Trigger                                           | `Encounter.status` | Why                                                                                                                                                                  |
+| ------------------------------------------------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `A05`                                             | `planned`          | Pre-admit — the admission hasn't happened yet                                                                                                                        |
+| `A11`                                             | `entered-in-error` | Cancel admit — the admit message itself was sent in error and should be disregarded                                                                                  |
+| anything else (`A01`, `A02`, `A06`, `A08`, `A09`) | `in-progress`      | HL7v2 doesn't encode a distinct Encounter-level state for a transfer, a class change, or a departure-tracking event beyond what `PV1` already maps (location, class) |
+
+This package doesn't attempt to infer discharge status from any of these triggers alone.
+`Encounter.participant[0].type` is always set to `ATND` (attending) since that's the only
+doctor field mapped.
 
 ### Reverse: FHIR → HL7v2
 
@@ -130,16 +147,16 @@ A field with no FHIR-side value is omitted from the output entirely (HL7v2
 trailing/embedded empty fields), never padded with placeholder text. Additional
 synthesized fields, since FHIR has no equivalent:
 
-| HL7v2 field         | Value                                                       | Notes                                                                                                                          |
-| ------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `MSH-2`             | `^~\&`                                                      | Standard encoding characters                                                                                                   |
-| `MSH-3`–`MSH-6`     | `FHIR-TRANSLATOR` / `HL7FHIR` / `HIS` / `HOSP`              | Synthetic sending/receiving application+facility                                                                               |
-| `MSH-7`             | Current UTC timestamp                                       | Message creation time                                                                                                          |
-| `MSH-9`             | `ADT^A01`                                                   | Trigger is always `A01` when translating from FHIR (no signal in a bare Patient/Encounter to distinguish admission vs. update) |
-| `MSH-10`            | Generated control ID (`TRX<timestamp><counter>`)            |                                                                                                                                |
-| `MSH-11` / `MSH-12` | `P` / `2.5`                                                 | Processing ID, version ID                                                                                                      |
-| `EVN-1`             | `A01`                                                       | Matches `MSH-9`'s trigger                                                                                                      |
-| `EVN-2`             | `Encounter.period.start` if present, else current timestamp |                                                                                                                                |
+| HL7v2 field         | Value                                                       | Notes                                                                                                                                                                                                          |
+| ------------------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MSH-2`             | `^~\&`                                                      | Standard encoding characters                                                                                                                                                                                   |
+| `MSH-3`–`MSH-6`     | `FHIR-TRANSLATOR` / `HL7FHIR` / `HIS` / `HOSP`              | Synthetic sending/receiving application+facility                                                                                                                                                               |
+| `MSH-7`             | Current UTC timestamp                                       | Message creation time                                                                                                                                                                                          |
+| `MSH-9`             | `ADT^A01`, `A05`, or `A11`                                  | Inverse of the forward table's status row: `planned`→`A05`, `entered-in-error`→`A11`, anything else→`A01` (no signal in a bare Patient/Encounter to distinguish `A01`/`A02`/`A06`/`A08`/`A09` from each other) |
+| `MSH-10`            | Generated control ID (`TRX<timestamp><counter>`)            |                                                                                                                                                                                                                |
+| `MSH-11` / `MSH-12` | `P` / `2.5`                                                 | Processing ID, version ID                                                                                                                                                                                      |
+| `EVN-1`             | Same trigger as `MSH-9`                                     | e.g. `A05` if `Encounter.status` was `planned`                                                                                                                                                                 |
+| `EVN-2`             | `Encounter.period.start` if present, else current timestamp |                                                                                                                                                                                                                |
 
 ### Not mapped
 
@@ -149,6 +166,13 @@ direction, any FHIR resource in the bundle other than `Patient`/`Encounter` is l
 warned about and skipped.
 
 ### Worked example
+
+Sample messages for every trigger are in `samples/` (`adt_a01.hl7`, `adt_a02.hl7`,
+`adt_a05.hl7`, `adt_a06.hl7`, `adt_a08.hl7`, `adt_a09.hl7`, `adt_a11.hl7`) — they differ
+only in `MSH-9`/`EVN-1`'s trigger code and, for `A05`/`A11`, the resulting
+`Encounter.status`. The full worked example below uses `A01`; translate any of the others
+yourself with `npx hl7-fhir-translator -i samples/adt_a05.hl7` to see the `planned` status,
+or `adt_a11.hl7` for `entered-in-error`.
 
 Input (`samples/adt_a01.hl7`):
 
@@ -247,6 +271,109 @@ Output (`translateHl7ToFhir` — the complete Bundle, both entries):
         "period": {
           "start": "2024-01-01T12:00:00Z"
         }
+      }
+    }
+  ]
+}
+```
+
+---
+
+## ADT^A17 (swap patients)
+
+`A17` is structurally different from every other ADT trigger above: HL7v2 uses it to
+report two patients swapping locations/beds in a single message, so it carries **two**
+`PID`/`PV1` groups instead of one. The IG's own mapping pages don't call this cardinality
+out (they describe segment-to-resource-type mapping generically), so this section — and
+the two-group parsing itself — is this package's own reading of the HL7v2 spec's `A17`
+definition.
+
+**Segments read**: `MSH`, `EVN`, two `PID`/`PV1` pairs
+**Resources produced**: two `Patient`+`Encounter` pairs (`patient-1`/`encounter-1`,
+`patient-2`/`encounter-2`)
+
+### Forward: HL7v2 → FHIR
+
+Each `PID`/`PV1` pair maps through the exact same fields as `A01` above, applied twice —
+once per pair, in message order (the field-by-field notes are identical to the `A01` table
+two sections up, so aren't repeated here in full):
+
+| HL7v2 field | FHIR path                                     | Notes                                   |
+| ----------- | --------------------------------------------- | --------------------------------------- |
+| `PID-3.1`   | `Patient.identifier[0].value`                 | Medical record number, per patient      |
+| `PID-5.1`   | `Patient.name[0].family`                      | Per patient                             |
+| `PID-5.2`   | `Patient.name[0].given[0]`                    | Per patient                             |
+| `PID-7`     | `Patient.birthDate`                           | Per patient                             |
+| `PID-8`     | `Patient.gender`                              | Per patient                             |
+| `PID-11.1`  | `Patient.address[0].line[0]`                  | Per patient                             |
+| `PV1-2`     | `Encounter.class`                             | Per patient's own `PV1`                 |
+| `PV1-3.1`   | `Encounter.location[0].location.display`      | Per patient's own `PV1`                 |
+| `PV1-7.2`   | `Encounter.participant[0].individual.display` | Per patient's own `PV1`                 |
+| `EVN-2`     | `Encounter.period.start`                      | Shared — one `EVN` covers both patients |
+
+`Encounter.status` is always `in-progress` for both (a swap isn't an admission, discharge,
+or cancellation event). A message with fewer than two `PID` segments throws
+`FhirValidationError` rather than falling back to the single-patient path.
+
+### Reverse: FHIR → HL7v2
+
+Given a bundle with two or more `Patient` resources, this package writes one `PID`/`PV1`
+pair per `Patient`, in bundle order. Each `Encounter` is matched to its `Patient` via
+`Encounter.subject.reference` (e.g. `"Patient/patient-1"`) — a `Patient` with no matching
+`Encounter` still gets a `PID`, but no `PV1`, and a warning. `MSH-9`/`EVN-1` are always
+written as `A17` when two or more `Patient` resources are present; this is also how the
+reverse router (`registry.ts`) distinguishes an `A17` bundle from a single-patient `A01`
+one — resource-type presence alone can't (both bundles contain `Patient` and `Encounter`),
+so routing here specifically counts `Patient` occurrences rather than just checking
+presence.
+
+### Not mapped
+
+Same as `A01` above — any segment other than `MSH`/`EVN`/`PID`/`PV1` is warned about and
+skipped; any FHIR resource other than `Patient`/`Encounter` is likewise warned about and
+skipped on the reverse direction.
+
+### Worked example
+
+Input (`samples/adt_a17.hl7`):
+
+```hl7
+MSH|^~\&|HIS|HOSP|ADT|HOSP|20240112143000||ADT^A17|MSG019|P|2.5
+EVN|A17|20240112143000
+PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M|||123 Main St^^Springfield^IL^62701^USA
+PV1|1|I|ICU^101^A^^^HOSP||||1234^Smith^Jane^M^MD
+PID|2||MRN67890^^^HOSP^MR||Roe^Richard^B||19750822|M|||789 Elm St^^Springfield^IL^62701^USA
+PV1|2|I|ICU^102^B^^^HOSP||||5678^Nguyen^Anh^^MD
+```
+
+Output (`translateHl7ToFhir` — a 4-entry Bundle: `Patient`, `Encounter`, `Patient`,
+`Encounter`, one pair per patient in the swap):
+
+```json
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    { "resource": { "resourceType": "Patient", "id": "patient-1", "name": [{ "family": "Doe", "given": ["John", "A"] }] } },
+    {
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "encounter-1",
+        "status": "in-progress",
+        "class": { "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode", "code": "IMP", "display": "inpatient encounter" },
+        "subject": { "reference": "Patient/patient-1", "display": "Doe" },
+        "location": [{ "location": { "display": "ICU" } }]
+      }
+    },
+    { "resource": { "resourceType": "Patient", "id": "patient-2", "name": [{ "family": "Roe", "given": ["Richard", "B"] }] } },
+    {
+      "resource": {
+        "resourceType": "Encounter",
+        "id": "encounter-2",
+        "status": "in-progress",
+        "class": { "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode", "code": "IMP", "display": "inpatient encounter" },
+        "subject": { "reference": "Patient/patient-2", "display": "Roe" },
+        "location": [{ "location": { "display": "ICU" } }]
       }
     }
   ]

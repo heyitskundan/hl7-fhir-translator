@@ -20,6 +20,50 @@ const ADT_A08 = [
   "PV1|1|I|ICU^102^B^^^HOSP||||1234^Smith^Jane^M^MD",
 ].join("\r");
 
+const ADT_A02 = [
+  "MSH|^~\\&|HIS|HOSP|ADT|HOSP|20240107100000||ADT^A02|MSG014|P|2.5",
+  "EVN|A02|20240107100000",
+  "PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M|||123 Main St^^Springfield^IL^62701^USA",
+  "PV1|1|I|WARD3^305^A^^^HOSP||||1234^Smith^Jane^M^MD",
+].join("\r");
+
+const ADT_A05 = [
+  "MSH|^~\\&|HIS|HOSP|ADT|HOSP|20240108083000||ADT^A05|MSG015|P|2.5",
+  "EVN|A05|20240108083000",
+  "PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M|||123 Main St^^Springfield^IL^62701^USA",
+  "PV1|1|I|ICU^101^A^^^HOSP||||1234^Smith^Jane^M^MD",
+].join("\r");
+
+const ADT_A06 = [
+  "MSH|^~\\&|HIS|HOSP|ADT|HOSP|20240109110000||ADT^A06|MSG016|P|2.5",
+  "EVN|A06|20240109110000",
+  "PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M|||123 Main St^^Springfield^IL^62701^USA",
+  "PV1|1|I|ICU^101^A^^^HOSP||||1234^Smith^Jane^M^MD",
+].join("\r");
+
+const ADT_A09 = [
+  "MSH|^~\\&|HIS|HOSP|ADT|HOSP|20240110133000||ADT^A09|MSG017|P|2.5",
+  "EVN|A09|20240110133000",
+  "PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M|||123 Main St^^Springfield^IL^62701^USA",
+  "PV1|1|I|RADIOLOGY^1^A^^^HOSP||||1234^Smith^Jane^M^MD",
+].join("\r");
+
+const ADT_A11 = [
+  "MSH|^~\\&|HIS|HOSP|ADT|HOSP|20240111090000||ADT^A11|MSG018|P|2.5",
+  "EVN|A11|20240111090000",
+  "PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M|||123 Main St^^Springfield^IL^62701^USA",
+  "PV1|1|I|ICU^101^A^^^HOSP||||1234^Smith^Jane^M^MD",
+].join("\r");
+
+const ADT_A17 = [
+  "MSH|^~\\&|HIS|HOSP|ADT|HOSP|20240112143000||ADT^A17|MSG019|P|2.5",
+  "EVN|A17|20240112143000",
+  "PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M|||123 Main St^^Springfield^IL^62701^USA",
+  "PV1|1|I|ICU^101^A^^^HOSP||||1234^Smith^Jane^M^MD",
+  "PID|2||MRN67890^^^HOSP^MR||Roe^Richard^B||19750822|M|||789 Elm St^^Springfield^IL^62701^USA",
+  "PV1|2|I|ICU^102^B^^^HOSP||||5678^Nguyen^Anh^^MD",
+].join("\r");
+
 const ORU_R01 = [
   "MSH|^~\\&|LIS|LAB|HIS|HOSP|20240101130000||ORU^R01|MSG002|P|2.5",
   "PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M",
@@ -299,7 +343,13 @@ const FHIR_DOCUMENT_REFERENCE = JSON.stringify(
 
 export const SAMPLES: Sample[] = [
   { label: "ADT^A01 — Patient admission (HL7 → FHIR)", direction: "hl7ToFhir", content: ADT_A01 },
+  { label: "ADT^A02 — Patient transfer (HL7 → FHIR)", direction: "hl7ToFhir", content: ADT_A02 },
+  { label: "ADT^A05 — Pre-admit a patient (HL7 → FHIR)", direction: "hl7ToFhir", content: ADT_A05 },
+  { label: "ADT^A06 — Change outpatient to inpatient (HL7 → FHIR)", direction: "hl7ToFhir", content: ADT_A06 },
   { label: "ADT^A08 — Patient update (HL7 → FHIR)", direction: "hl7ToFhir", content: ADT_A08 },
+  { label: "ADT^A09 — Patient departing, tracking (HL7 → FHIR)", direction: "hl7ToFhir", content: ADT_A09 },
+  { label: "ADT^A11 — Cancel admit (HL7 → FHIR)", direction: "hl7ToFhir", content: ADT_A11 },
+  { label: "ADT^A17 — Swap patients (HL7 → FHIR)", direction: "hl7ToFhir", content: ADT_A17 },
   { label: "ORU^R01 — Lab result panel (HL7 → FHIR)", direction: "hl7ToFhir", content: ORU_R01 },
   { label: "ORM^O01 — General order (HL7 → FHIR)", direction: "hl7ToFhir", content: ORM_O01 },
   { label: "VXU^V04 — Immunization record (HL7 → FHIR)", direction: "hl7ToFhir", content: VXU_V04 },

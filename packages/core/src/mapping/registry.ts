@@ -20,7 +20,13 @@ export interface SupportedMessageType {
 /** The complete, authoritative list of HL7v2 message types this package can translate. */
 export const SUPPORTED_MESSAGE_TYPES: SupportedMessageType[] = [
   { category: "ADT", trigger: "A01", description: "Patient admission" },
+  { category: "ADT", trigger: "A02", description: "Patient transfer" },
+  { category: "ADT", trigger: "A05", description: "Pre-admit a patient" },
+  { category: "ADT", trigger: "A06", description: "Change an outpatient to an inpatient" },
   { category: "ADT", trigger: "A08", description: "Patient information update" },
+  { category: "ADT", trigger: "A09", description: "Patient departing — tracking" },
+  { category: "ADT", trigger: "A11", description: "Cancel admit / cancel visit" },
+  { category: "ADT", trigger: "A17", description: "Swap patients" },
   { category: "ORU", trigger: "R01", description: "Unsolicited observation / lab result" },
   { category: "ORM", trigger: "O01", description: "General order" },
   { category: "VXU", trigger: "V04", description: "Unsolicited vaccination record update" },
@@ -35,25 +41,29 @@ export function isSupportedMessageType(category: string, trigger: string): boole
 }
 
 /**
- * One reverse-routing rule: if every resource type in `requires` is present in the
- * bundle, route to `category` (and `trigger`, for message types where more than one
- * trigger shares the same resource shape — reverse translation can't distinguish them
- * further, so it picks a default).
+ * One reverse-routing rule: if every resource type in `requires` appears at least
+ * `minCount` times (default 1) in the bundle, route to `category` (and `trigger`, for
+ * message types where more than one trigger shares the same resource shape — this only
+ * picks a *display default* for `inspectInput`'s preview; the actual mapper for a
+ * multi-trigger category, e.g. ADT, derives the real trigger itself from the resource
+ * content it's given, not from this table).
  *
  * `ROUTING_RULES` is checked top to bottom, first match wins. Ordering invariant,
  * enforced by `assertRoutingRulesAreOrderedBySpecificity` below (checked once at module
- * load, not per call): if rule A's `requires` set is a subset of rule B's `requires`
- * set, B must appear before A. This is what "most specific first" meant in the old
- * if/else chain — encoding it as a checked invariant over resource-type *sets* (rather
- * than a single resource type per branch) means a message type that shares more than one
- * resource type with another (e.g. a future type producing both `ServiceRequest` and
- * `MedicationRequest`) can be disambiguated by requiring both, without the ordering
- * becoming a guessing game as more rules are added.
+ * load, not per call): if rule A's `requires` set is a subset of rule B's `requires` set
+ * (or they require the same set but B has a higher `minCount`), B must appear before A.
+ * This is what "most specific first" meant in the old if/else chain — encoding it as a
+ * checked invariant over resource-type *sets and counts* (rather than a single resource
+ * type per branch) means a message type that shares resource types with another (e.g. a
+ * future type producing both `ServiceRequest` and `MedicationRequest`, or — like
+ * ADT^A17's patient swap — two of the same resource type) can be disambiguated by
+ * requiring more, without the ordering becoming a guessing game as more rules are added.
  */
 interface RoutingRule {
   category: string;
   trigger?: string;
   requires: readonly string[];
+  minCount?: number;
 }
 
 const ROUTING_RULES: readonly RoutingRule[] = [
@@ -63,19 +73,26 @@ const ROUTING_RULES: readonly RoutingRule[] = [
   { category: "VXU", requires: ["Immunization"] },
   { category: "SIU", requires: ["Appointment"] },
   { category: "MDM", requires: ["DocumentReference"] },
+  { category: "ADT", trigger: "A17", requires: ["Patient"], minCount: 2 },
   { category: "ADT", trigger: "A01", requires: ["Patient"] },
 ];
+
+function specificityKey(rule: RoutingRule): string {
+  return [...rule.requires].sort().join(",");
+}
 
 function assertRoutingRulesAreOrderedBySpecificity(rules: readonly RoutingRule[]): void {
   for (let i = 0; i < rules.length; i++) {
     for (let j = i + 1; j < rules.length; j++) {
-      const earlier = new Set(rules[i]!.requires);
-      const later = rules[j]!.requires;
-      const laterIsMoreSpecific = later.length > earlier.size && later.every((t) => earlier.has(t));
-      if (laterIsMoreSpecific) {
+      const earlier = rules[i]!;
+      const later = rules[j]!;
+      const earlierFields = new Set(earlier.requires);
+      const laterMoreFields = later.requires.length > earlierFields.size && later.requires.every((t) => earlierFields.has(t));
+      const sameFieldsHigherMinCount = specificityKey(earlier) === specificityKey(later) && (later.minCount ?? 1) > (earlier.minCount ?? 1);
+      if (laterMoreFields || sameFieldsHigherMinCount) {
         throw new Error(
-          `ROUTING_RULES ordering bug: rule for "${rules[j]!.category}" (requires: ${later.join(", ")}) is more specific than ` +
-            `earlier rule for "${rules[i]!.category}" (requires: ${[...earlier].join(", ")}) but appears after it — it would never match.`,
+          `ROUTING_RULES ordering bug: rule for "${later.category}^${later.trigger ?? ""}" (requires: ${later.requires.join(", ")}, minCount: ${later.minCount ?? 1}) ` +
+            `is more specific than earlier rule for "${earlier.category}^${earlier.trigger ?? ""}" but appears after it — it would never match.`,
         );
       }
     }
@@ -87,10 +104,13 @@ assertRoutingRulesAreOrderedBySpecificity(ROUTING_RULES);
  * Pure, non-throwing lookup from the FHIR resource types present in a bundle to the
  * HL7v2 message type they'd translate to. Shared by the throwing router below and by
  * `inspectInput` (../inspect.js), which needs the same rule without an exception on a
- * miss.
+ * miss. Takes the resource-type list with duplicates preserved (not deduplicated), since
+ * some rules (e.g. ADT^A17) are count-sensitive.
  */
-export function detectTargetMessageType(resourceTypes: ReadonlySet<string>): SupportedMessageType | undefined {
-  const rule = ROUTING_RULES.find((r) => r.requires.every((t) => resourceTypes.has(t)));
+export function detectTargetMessageType(resourceTypes: readonly string[]): SupportedMessageType | undefined {
+  const counts = new Map<string, number>();
+  for (const t of resourceTypes) counts.set(t, (counts.get(t) ?? 0) + 1);
+  const rule = ROUTING_RULES.find((r) => r.requires.every((t) => (counts.get(t) ?? 0) >= (r.minCount ?? 1)));
   if (!rule) return undefined;
   return SUPPORTED_MESSAGE_TYPES.find((t) => t.category === rule.category && (rule.trigger === undefined || t.trigger === rule.trigger));
 }
@@ -99,11 +119,13 @@ export function detectTargetMessageType(resourceTypes: ReadonlySet<string>): Sup
 export function hl7ToFhirByMessageType(message: Hl7Message): { bundle: Bundle; trail: MappingTrail } {
   const [category, trigger] = message.messageType.split("^");
   switch (category) {
-    case "ADT":
-      if (trigger !== "A01" && trigger !== "A08") {
-        throw new FhirValidationError(`Unsupported ADT trigger event "${trigger}". Supported: A01, A08.`);
+    case "ADT": {
+      const adtTriggers = SUPPORTED_MESSAGE_TYPES.filter((t) => t.category === "ADT").map((t) => t.trigger);
+      if (!trigger || !adtTriggers.includes(trigger)) {
+        throw new FhirValidationError(`Unsupported ADT trigger event "${trigger}". Supported: ${adtTriggers.join(", ")}.`);
       }
       return adtToFhir(message);
+    }
     case "ORU":
       if (trigger !== "R01") {
         throw new FhirValidationError(`Unsupported ORU trigger event "${trigger}". Supported: R01.`);
@@ -143,7 +165,7 @@ export function hl7ToFhirByMessageType(message: Hl7Message): { bundle: Bundle; t
 
 /** Routes a FHIR bundle to the reverse mapper based on which resource types it contains. */
 export function fhirToHl7ByResourceType(bundle: Bundle): { message: Hl7Message; trail: MappingTrail } {
-  const types = new Set(bundle.entry.map((e) => e.resource.resourceType));
+  const types = bundle.entry.map((e) => e.resource.resourceType);
   const target = detectTargetMessageType(types);
   if (target?.category === "OML") return fhirToOml(bundle);
   if (target?.category === "ORM") return fhirToOrm(bundle);
@@ -151,7 +173,7 @@ export function fhirToHl7ByResourceType(bundle: Bundle): { message: Hl7Message; 
   if (target?.category === "VXU") return fhirToVxu(bundle);
   if (target?.category === "SIU") return fhirToSiu(bundle);
   if (target?.category === "MDM") return fhirToMdm(bundle);
-  if (target?.category === "ADT") return fhirToAdt(bundle, target.trigger);
+  if (target?.category === "ADT") return fhirToAdt(bundle);
   throw new FhirValidationError(
     "Bundle must contain a Patient, DiagnosticReport, ServiceRequest, Specimen, Immunization, Appointment, or DocumentReference resource to determine the target HL7v2 message type.",
   );

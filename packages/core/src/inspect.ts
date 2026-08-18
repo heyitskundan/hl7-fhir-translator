@@ -81,7 +81,7 @@ export function inspectInput(input: string): DetectionResult {
         ? (obj.entry ?? []).map((e) => e.resource?.resourceType).filter((t): t is string => !!t)
         : [obj.resourceType];
 
-    const target = detectTargetMessageType(new Set(resourceTypes));
+    const target = detectTargetMessageType(resourceTypes);
     return {
       direction: "fhirToHl7",
       detail: {
