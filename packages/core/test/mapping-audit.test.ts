@@ -19,7 +19,12 @@ interface MessageTypeAudit {
 }
 
 const AUDITS: MessageTypeAudit[] = [
-  { heading: "## ADT^A01 (admission) and ADT^A08 (update)", sampleFile: "adt_a01.hl7" },
+  {
+    heading:
+      "## ADT^A01, A02, A05, A06, A08, A09, A11 (admission, transfer, pre-admit, class change, update, departure tracking, cancel admit)",
+    sampleFile: "adt_a01.hl7",
+  },
+  { heading: "## ADT^A17 (swap patients)", sampleFile: "adt_a17.hl7" },
   { heading: "## ORU^R01 (unsolicited lab result)", sampleFile: "oru_r01.hl7" },
   { heading: "## ORM^O01 (general order)", sampleFile: "orm_o01.hl7" },
   { heading: "## VXU^V04 (immunization record update)", sampleFile: "vxu_v04.hl7" },

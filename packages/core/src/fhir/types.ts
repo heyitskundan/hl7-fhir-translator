@@ -95,12 +95,12 @@ export interface Patient {
   address?: Address[];
 }
 
-/** A clinical encounter (visit). Produced from/consumed for ADT^A01/A08. */
+/** A clinical encounter (visit). Produced from/consumed for the ADT message types. */
 export interface Encounter {
   resourceType: "Encounter";
   id?: string;
   meta?: Meta;
-  status: "planned" | "in-progress" | "finished" | "unknown";
+  status: "planned" | "in-progress" | "finished" | "entered-in-error" | "unknown";
   class: Coding;
   subject?: Reference;
   participant?: { individual?: Reference; type?: CodeableConcept[] }[];

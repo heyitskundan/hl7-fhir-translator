@@ -23,7 +23,13 @@ interface SupportedType {
 
 const SUPPORTED_TYPES: SupportedType[] = [
   { hl7: "ADT^A01", label: "admission", fhir: "Patient + Encounter" },
+  { hl7: "ADT^A02", label: "transfer", fhir: "Patient + Encounter" },
+  { hl7: "ADT^A05", label: "pre-admit", fhir: "Patient + Encounter (planned)" },
+  { hl7: "ADT^A06", label: "outpatient → inpatient", fhir: "Patient + Encounter" },
   { hl7: "ADT^A08", label: "update", fhir: "Patient + Encounter" },
+  { hl7: "ADT^A09", label: "departing, tracking", fhir: "Patient + Encounter" },
+  { hl7: "ADT^A11", label: "cancel admit", fhir: "Patient + Encounter (entered-in-error)" },
+  { hl7: "ADT^A17", label: "swap patients", fhir: "2× Patient + Encounter" },
   { hl7: "ORU^R01", label: "lab result", fhir: "DiagnosticReport + Observation[]" },
   { hl7: "ORM^O01", label: "order", fhir: "ServiceRequest" },
   { hl7: "VXU^V04", label: "immunization", fhir: "Immunization" },
@@ -73,8 +79,9 @@ const PID_TO_PATIENT: SegmentTable = {
 const MESSAGE_TYPE_SECTIONS: MessageTypeSection[] = [
   {
     id: "adt",
-    title: "ADT^A01 / ADT^A08 → Patient + Encounter",
-    description: "Both trigger events share the same segments and mapping. Reads `MSH`, `EVN`, `PID`, `PV1`.",
+    title: "ADT^A01 / A02 / A05 / A06 / A08 / A09 / A11 → Patient + Encounter",
+    description:
+      "All seven trigger events share the same segments and field mapping. Reads `MSH`, `EVN`, `PID`, `PV1`. The official IG's ADT pages map segments to resource types generically and don't specify a per-trigger status rule — the status table below is this package's own reading of the HL7v2 trigger semantics.",
     tables: [
       PID_TO_PATIENT,
       {
@@ -87,8 +94,34 @@ const MESSAGE_TYPE_SECTIONS: MessageTypeSection[] = [
           { hl7: "EVN-2", fhir: "Encounter.period.start", note: "Recorded event date/time" },
         ],
       },
+      {
+        label: "MSH-9 trigger → Encounter.status",
+        thirdColumn: "notes",
+        rows: [
+          { hl7: "A05", fhir: "Encounter.status", note: "planned — admission hasn't happened yet" },
+          { hl7: "A11", fhir: "Encounter.status", note: "entered-in-error — admit message sent in error" },
+          { hl7: "A01, A02, A06, A08, A09", fhir: "Encounter.status", note: "in-progress (default)" },
+        ],
+      },
     ],
-    footnote: "`Encounter.status` is always `in-progress`; `participant[0].type` is always `ATND`.",
+    footnote: "`participant[0].type` is always `ATND`.",
+  },
+  {
+    id: "adt-a17",
+    title: "ADT^A17 → 2× Patient + Encounter",
+    description:
+      "Structurally different from every other ADT trigger: HL7v2 uses A17 to report two patients swapping locations in one message, so it carries two `PID`/`PV1` groups. Each field maps exactly like A01 above, applied once per group. `Encounter.status` is always `in-progress`; a message with fewer than two `PID` segments throws.",
+    tables: [
+      {
+        thirdColumn: "notes",
+        rows: [
+          { hl7: "PID (×2)", fhir: "Patient[0], Patient[1]", note: "Same PID→Patient mapping as A01, per patient" },
+          { hl7: "PV1 (×2)", fhir: "Encounter[0], Encounter[1]", note: "Same PV1→Encounter mapping as A01, per patient" },
+        ],
+      },
+    ],
+    footnote:
+      "Reverse routing (FHIR → HL7v2) picks A17 when a bundle contains 2+ `Patient` resources — resource-type presence alone can't distinguish it from a single-patient A01 bundle, so this is the one place routing counts occurrences instead of just checking presence.",
   },
   {
     id: "oru",

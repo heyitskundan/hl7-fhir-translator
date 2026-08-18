@@ -22,16 +22,22 @@ function with zero runtime dependencies — install it and call it, nothing else
 
 ## Supported message types
 
-| HL7v2                    | FHIR                                 | Direction |
-| ------------------------ | ------------------------------------ | --------- |
-| `ADT^A01` (admission)    | `Patient` + `Encounter`              | both      |
-| `ADT^A08` (update)       | `Patient` + `Encounter`              | both      |
-| `ORU^R01` (lab result)   | `DiagnosticReport` + `Observation[]` | both      |
-| `ORM^O01` (order)        | `ServiceRequest`                     | both      |
-| `VXU^V04` (immunization) | `Immunization`                       | both      |
-| `SIU^S12` (appointment)  | `Appointment`                        | both      |
-| `OML^O21` (lab order)    | `ServiceRequest` + `Specimen`        | both      |
-| `MDM^T02` (document)     | `DocumentReference`                  | both      |
+| HL7v2                            | FHIR                                       | Direction |
+| -------------------------------- | ------------------------------------------ | --------- |
+| `ADT^A01` (admission)            | `Patient` + `Encounter`                    | both      |
+| `ADT^A02` (transfer)             | `Patient` + `Encounter`                    | both      |
+| `ADT^A05` (pre-admit)            | `Patient` + `Encounter` (planned)          | both      |
+| `ADT^A06` (outpatient→inpatient) | `Patient` + `Encounter`                    | both      |
+| `ADT^A08` (update)               | `Patient` + `Encounter`                    | both      |
+| `ADT^A09` (departing, tracking)  | `Patient` + `Encounter`                    | both      |
+| `ADT^A11` (cancel admit)         | `Patient` + `Encounter` (entered-in-error) | both      |
+| `ADT^A17` (swap patients)        | 2× `Patient` + `Encounter`                 | both      |
+| `ORU^R01` (lab result)           | `DiagnosticReport` + `Observation[]`       | both      |
+| `ORM^O01` (order)                | `ServiceRequest`                           | both      |
+| `VXU^V04` (immunization)         | `Immunization`                             | both      |
+| `SIU^S12` (appointment)          | `Appointment`                              | both      |
+| `OML^O21` (lab order)            | `ServiceRequest` + `Specimen`              | both      |
+| `MDM^T02` (document)             | `DocumentReference`                        | both      |
 
 Full field-level detail is in [`docs/MAPPING.md`](./docs/MAPPING.md).
 
@@ -65,8 +71,8 @@ Requires Node.js 18+.
 git clone https://github.com/heyitskundan/hl7-fhir-translator.git
 cd hl7-fhir-translator
 npm install
-npm test               # 177 tests: 143 in packages/core (parser, all eight message-type mappings both
-                        # directions, a docs/code mapping audit, detection, CLI) + 34 in client (UI/demo)
+npm test               # 196 tests: 155 in packages/core (parser, all 14 message-type mappings both
+                        # directions, a docs/code mapping audit, detection, CLI) + 41 in client (UI/demo)
 npm run build           # builds packages/core, then client
 npm run dev              # runs the browser demo at http://localhost:5173
 ```

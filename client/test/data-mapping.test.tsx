@@ -8,7 +8,8 @@ describe("DataMapping", () => {
 
     expect(screen.getByRole("heading", { level: 2, name: "Supported message types" })).toBeTruthy();
     for (const heading of [
-      "ADT^A01 / ADT^A08 → Patient + Encounter",
+      "ADT^A01 / A02 / A05 / A06 / A08 / A09 / A11 → Patient + Encounter",
+      "ADT^A17 → 2× Patient + Encounter",
       "ORU^R01 → DiagnosticReport + Observation[]",
       "ORM^O01 → ServiceRequest",
       "VXU^V04 → Immunization",

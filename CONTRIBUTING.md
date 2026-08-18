@@ -39,8 +39,8 @@ translation library, agreeing on the target mapping table up front avoids rework
 git clone https://github.com/heyitskundan/hl7-fhir-translator.git
 cd hl7-fhir-translator
 npm install
-npm test               # 177 tests: 143 in packages/core (parser, all eight mapping directions,
-                        # a docs/code mapping audit, detection, CLI) + 34 in client (UI/demo)
+npm test               # 196 tests: 155 in packages/core (parser, all 14 mapping directions,
+                        # a docs/code mapping audit, detection, CLI) + 41 in client (UI/demo)
 npm run build           # packages/core (dual ESM+CJS via tsup) + client
 npm run dev              # browser demo at http://localhost:5173
 ```

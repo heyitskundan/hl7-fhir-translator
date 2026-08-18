@@ -132,16 +132,22 @@ input to the right handler in a pipeline. Full shape in [API reference](#api-ref
 
 ## Supported message types
 
-| HL7v2                    | FHIR                                 | Direction |
-| ------------------------ | ------------------------------------ | --------- |
-| `ADT^A01` (admission)    | `Patient` + `Encounter`              | both      |
-| `ADT^A08` (update)       | `Patient` + `Encounter`              | both      |
-| `ORU^R01` (lab result)   | `DiagnosticReport` + `Observation[]` | both      |
-| `ORM^O01` (order)        | `ServiceRequest`                     | both      |
-| `VXU^V04` (immunization) | `Immunization`                       | both      |
-| `SIU^S12` (appointment)  | `Appointment`                        | both      |
-| `OML^O21` (lab order)    | `ServiceRequest` + `Specimen`        | both      |
-| `MDM^T02` (document)     | `DocumentReference`                  | both      |
+| HL7v2                            | FHIR                                       | Direction |
+| -------------------------------- | ------------------------------------------ | --------- |
+| `ADT^A01` (admission)            | `Patient` + `Encounter`                    | both      |
+| `ADT^A02` (transfer)             | `Patient` + `Encounter`                    | both      |
+| `ADT^A05` (pre-admit)            | `Patient` + `Encounter` (planned)          | both      |
+| `ADT^A06` (outpatient→inpatient) | `Patient` + `Encounter`                    | both      |
+| `ADT^A08` (update)               | `Patient` + `Encounter`                    | both      |
+| `ADT^A09` (departing, tracking)  | `Patient` + `Encounter`                    | both      |
+| `ADT^A11` (cancel admit)         | `Patient` + `Encounter` (entered-in-error) | both      |
+| `ADT^A17` (swap patients)        | 2× `Patient` + `Encounter`                 | both      |
+| `ORU^R01` (lab result)           | `DiagnosticReport` + `Observation[]`       | both      |
+| `ORM^O01` (order)                | `ServiceRequest`                           | both      |
+| `VXU^V04` (immunization)         | `Immunization`                             | both      |
+| `SIU^S12` (appointment)          | `Appointment`                              | both      |
+| `OML^O21` (lab order)            | `ServiceRequest` + `Specimen`              | both      |
+| `MDM^T02` (document)             | `DocumentReference`                        | both      |
 
 This list is also available at runtime as `SUPPORTED_MESSAGE_TYPES` (see below) so you can
 check support programmatically instead of hardcoding it. An unsupported message type
@@ -176,7 +182,10 @@ message type is inferred from which resource types are present, checked in this 
 (most specific first, since some resource types are shared by more than one message
 type): `Specimen` → `OML^O21`, else `ServiceRequest` → `ORM^O01`, else `DiagnosticReport`
 → `ORU^R01`, else `Immunization` → `VXU^V04`, else `Appointment` → `SIU^S12`, else
-`DocumentReference` → `MDM^T02`, otherwise `Patient` → `ADT^A01`.
+`DocumentReference` → `MDM^T02`, else two or more `Patient` resources → `ADT^A17`,
+otherwise `Patient` → `ADT^A01`. For a single-`Patient` bundle, the ADT mapper further
+picks the actual trigger (`A01`, `A05`, or `A11`) from the `Encounter.status` present —
+see [`docs/MAPPING.md`](../../docs/MAPPING.md) for the full status-to-trigger table.
 
 Throws `FhirValidationError` for invalid JSON or a bundle missing the resource type needed
 to determine the target message.
@@ -507,7 +516,7 @@ segment/resource.
 git clone https://github.com/heyitskundan/hl7-fhir-translator.git
 cd hl7-fhir-translator
 npm install
-npm test -w packages/core          # 143 tests: parser, all eight mapping directions, a docs/code mapping audit, detection, CLI
+npm test -w packages/core          # 155 tests: parser, all 14 mapping directions, a docs/code mapping audit, detection, CLI
 npm run build -w packages/core      # tsup: dual ESM+CJS + type defs + the CLI binary
 ```
 
