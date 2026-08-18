@@ -8,10 +8,23 @@ export function Changelog() {
       </p>
 
       <div className="flex flex-col gap-6">
+        <div id="v0-3-0" className="border-t pt-3" style={{ borderColor: "var(--color-divider)" }}>
+          <div className="mb-2 flex items-baseline gap-3">
+            <h3 className="m-0">v0.3.0</h3>
+            <span className="text-muted text-sm">current release</span>
+          </div>
+          <div className="mb-2 flex gap-2">
+            <span className="tag tag-accent">Added</span>
+          </div>
+          <ul className="m-0 flex list-disc flex-col gap-1 pl-5" style={{ opacity: 0.85 }}>
+            <li>ADT^A02, A05, A06, A09, A11 trigger events, sharing ADT^A01's segment/field mapping</li>
+            <li>ADT^A17 (swap patients) — two Patient+Encounter pairs from one message, with count-aware reverse routing</li>
+          </ul>
+        </div>
+
         <div id="v0-2-0" className="border-t pt-3" style={{ borderColor: "var(--color-divider)" }}>
           <div className="mb-2 flex items-baseline gap-3">
             <h3 className="m-0">v0.2.0</h3>
-            <span className="text-muted text-sm">current release</span>
           </div>
           <div className="mb-2 flex gap-2">
             <span className="tag tag-accent">Added</span>
