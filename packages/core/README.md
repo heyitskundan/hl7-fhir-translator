@@ -142,12 +142,14 @@ input to the right handler in a pipeline. Full shape in [API reference](#api-ref
 | `ADT^A09` (departing, tracking)  | `Patient` + `Encounter`                    | both      |
 | `ADT^A11` (cancel admit)         | `Patient` + `Encounter` (entered-in-error) | both      |
 | `ADT^A17` (swap patients)        | 2× `Patient` + `Encounter`                 | both      |
+| `ADT^A40` (merge patient)        | `Patient` + `Account`                      | both      |
 | `ORU^R01` (lab result)           | `DiagnosticReport` + `Observation[]`       | both      |
 | `ORM^O01` (order)                | `ServiceRequest`                           | both      |
 | `VXU^V04` (immunization)         | `Immunization`                             | both      |
 | `SIU^S12` (appointment)          | `Appointment`                              | both      |
 | `OML^O21` (lab order)            | `ServiceRequest` + `Specimen`              | both      |
 | `MDM^T02` (document)             | `DocumentReference`                        | both      |
+| `RDE^O11` (pharmacy order)       | `Medication` + `MedicationRequest`         | both      |
 
 This list is also available at runtime as `SUPPORTED_MESSAGE_TYPES` (see below) so you can
 check support programmatically instead of hardcoding it. An unsupported message type
@@ -180,12 +182,13 @@ Parses a FHIR R4 resource or `Bundle` (JSON string) and returns an HL7v2 message
 bare resource is accepted and wrapped in a `Bundle` automatically. The target HL7v2
 message type is inferred from which resource types are present, checked in this order
 (most specific first, since some resource types are shared by more than one message
-type): `Specimen` → `OML^O21`, else `ServiceRequest` → `ORM^O01`, else `DiagnosticReport`
-→ `ORU^R01`, else `Immunization` → `VXU^V04`, else `Appointment` → `SIU^S12`, else
-`DocumentReference` → `MDM^T02`, else two or more `Patient` resources → `ADT^A17`,
-otherwise `Patient` → `ADT^A01`. For a single-`Patient` bundle, the ADT mapper further
-picks the actual trigger (`A01`, `A05`, or `A11`) from the `Encounter.status` present —
-see [`docs/MAPPING.md`](../../docs/MAPPING.md) for the full status-to-trigger table.
+type): `Specimen` → `OML^O21`, else `MedicationRequest` → `RDE^O11`, else
+`ServiceRequest` → `ORM^O01`, else `DiagnosticReport` → `ORU^R01`, else `Immunization` →
+`VXU^V04`, else `Appointment` → `SIU^S12`, else `DocumentReference` → `MDM^T02`, else two
+or more `Patient` resources → `ADT^A17`, else an `Account` resource → `ADT^A40`, otherwise
+`Patient` → `ADT^A01`. For a single-`Patient` bundle, the ADT mapper further picks the
+actual trigger (`A01`, `A05`, or `A11`) from the `Encounter.status` present — see
+[`docs/MAPPING.md`](../../docs/MAPPING.md) for the full status-to-trigger table.
 
 Throws `FhirValidationError` for invalid JSON or a bundle missing the resource type needed
 to determine the target message.

@@ -31,12 +31,16 @@ export const apiReferenceRail: RailItem[] = [
 export const dataMappingRail: RailItem[] = [
   { href: "#supported", label: "Supported types" },
   { href: "#adt", label: "ADT → Patient/Encounter" },
+  { href: "#adt-a17", label: "ADT^A17 → 2× Patient/Encounter", indent: true },
+  { href: "#adt-a40", label: "ADT^A40 → Patient/Account", indent: true },
   { href: "#oru", label: "ORU → Diagnostic/Observation" },
   { href: "#orm", label: "ORM → ServiceRequest" },
   { href: "#vxu", label: "VXU → Immunization" },
   { href: "#siu", label: "SIU → Appointment" },
   { href: "#oml", label: "OML → ServiceRequest/Specimen" },
   { href: "#mdm", label: "MDM → DocumentReference" },
+  { href: "#rde", label: "RDE → Medication/MedicationRequest" },
+  { href: "#metadata", label: "Message metadata & IAM" },
   { href: "#terminology", label: "Terminology systems" },
 ];
 

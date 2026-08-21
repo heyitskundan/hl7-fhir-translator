@@ -73,7 +73,7 @@ Requires Node.js 18+.
 git clone https://github.com/heyitskundan/hl7-fhir-translator.git
 cd hl7-fhir-translator
 npm install
-npm test               # 368 tests: 327 in packages/core (parser, all 14 message-type mappings both
+npm test               # 391 tests: 350 in packages/core (parser, all 16 message-type mappings both
                         # directions, a docs/code mapping audit, detection, CLI) + 41 in client (UI/demo)
 npm run build           # builds packages/core, then client
 npm run dev              # runs the browser demo at http://localhost:5173

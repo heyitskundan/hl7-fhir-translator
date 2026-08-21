@@ -4,7 +4,7 @@ This is the field-level specification for what [`hl7-fhir-translator`](../packag
 actually maps — every HL7v2 field it reads or writes, and exactly which FHIR R4 path it
 corresponds to. It exists so a reviewer can audit correctness without reading the
 implementation, and so a contributor extending the package has a single source of truth
-to update alongside the code. Covers the 14 message types this package supports.
+to update alongside the code. Covers the 16 message types this package supports.
 
 ## Contents
 
@@ -2506,7 +2506,7 @@ parser translation uses):
 
 Note that `supported: false` is a valid, non-error result — it means "this parses as a
 real HL7v2 message, but no mapper in this package handles `category^trigger` yet" (e.g.
-`ADT^A03`, discharge — not one of the two ADT triggers this package maps). That's the
+`ADT^A03`, discharge — not one of the ADT triggers this package maps). That's the
 signal a caller should use to short-circuit before calling `translateHl7ToFhir` and
 hitting its `FhirValidationError` instead.
 
@@ -2522,13 +2522,15 @@ Once direction is `fhirToHl7`:
   - Otherwise, `resourceTypes` is a single-element array holding the bare resource's own
     `resourceType` — matching how `translateFhirToHl7` auto-wraps a bare resource into a
     one-entry `Bundle` before translating.
-  - `targetMessageType` is computed by the same rule `fhirToHl7ByResourceType` uses to
-    pick a mapper (checked in this priority order, first match wins, most specific first
-    since some resource types are shared by more than one message type): `Specimen`
-    present → `OML^O21`; else `ServiceRequest` present → `ORM^O01`; else
-    `DiagnosticReport` present → `ORU^R01`; else `Immunization` present → `VXU^V04`; else
-    `Appointment` present → `SIU^S12`; else `DocumentReference` present → `MDM^T02`; else
-    `Patient` present → `ADT^A01`. `supported` is `true` iff one of those matched.
+  - `targetMessageType` is computed by the same `ROUTING_RULES` table (`mapping/registry.ts`)
+    `fhirToHl7ByResourceType` uses to pick a mapper (checked in this priority order, first
+    match wins, most specific first since some resource types are shared by more than one
+    message type): `Specimen` present → `OML^O21`; else `MedicationRequest` present →
+    `RDE^O11`; else `ServiceRequest` present → `ORM^O01`; else `DiagnosticReport` present →
+    `ORU^R01`; else `Immunization` present → `VXU^V04`; else `Appointment` present →
+    `SIU^S12`; else `DocumentReference` present → `MDM^T02`; else two or more `Patient`
+    resources → `ADT^A17`; else `Account` present → `ADT^A40`; else `Patient` present →
+    `ADT^A01`. `supported` is `true` iff one of those matched.
 
 As with HL7 detection, `supported: false` (e.g. `resourceTypes: ["Practitioner"]`, which
 matches none of the three rules) is the signal to check _before_ calling

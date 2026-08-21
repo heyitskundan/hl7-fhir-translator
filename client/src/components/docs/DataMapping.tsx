@@ -30,12 +30,14 @@ const SUPPORTED_TYPES: SupportedType[] = [
   { hl7: "ADT^A09", label: "departing, tracking", fhir: "Patient + Encounter" },
   { hl7: "ADT^A11", label: "cancel admit", fhir: "Patient + Encounter (entered-in-error)" },
   { hl7: "ADT^A17", label: "swap patients", fhir: "2× Patient + Encounter" },
+  { hl7: "ADT^A40", label: "merge patient", fhir: "Patient + Account" },
   { hl7: "ORU^R01", label: "lab result", fhir: "DiagnosticReport + Observation[]" },
   { hl7: "ORM^O01", label: "order", fhir: "ServiceRequest" },
   { hl7: "VXU^V04", label: "immunization", fhir: "Immunization" },
   { hl7: "SIU^S12", label: "appointment", fhir: "Appointment" },
   { hl7: "OML^O21", label: "lab order", fhir: "ServiceRequest + Specimen" },
   { hl7: "MDM^T02", label: "document", fhir: "DocumentReference" },
+  { hl7: "RDE^O11", label: "pharmacy order", fhir: "Medication + MedicationRequest" },
 ];
 
 interface FieldRow {
@@ -246,6 +248,61 @@ const MESSAGE_TYPE_SECTIONS: MessageTypeSection[] = [
     ],
     footnote:
       "`DocumentReference.status` is always `current`; `content[0].attachment.contentType` is always `text/plain` since `TXA` carries no content-type field and no actual document bytes.",
+  },
+  {
+    id: "adt-a40",
+    title: "ADT^A40 → Patient + Account",
+    description:
+      "Retires one patient identity into another. Reads `MSH`, `EVN`, `PID` (mapping above), `MRG`. `MRG-3` (prior patient account number) is the only field with a FHIR target in the IG's own map.",
+    tables: [
+      {
+        thirdColumn: "notes",
+        rows: [{ hl7: "MRG-3", fhir: "Account.identifier[0]", note: "Prior patient account number, now folded into this PID's patient" }],
+      },
+    ],
+    footnote:
+      "`Account.status` is always `unknown` — MRG carries no status signal. `Account.subject` references the surviving Patient, not a second Patient for the retired identity. Reverse routing picks A40 when a bundle contains an `Account` resource.",
+  },
+  {
+    id: "rde",
+    title: "RDE^O11 → Medication + MedicationRequest",
+    description: "A pharmacy order. Reads `MSH`, `PID` (mapping above), `ORC`, `RXO`, `RXR`.",
+    tables: [
+      {
+        thirdColumn: "notes",
+        rows: [
+          { hl7: "ORC-1", fhir: "MedicationRequest.status", note: "NW→active, CA→cancelled, CM→completed" },
+          { hl7: "RXO-1", fhir: "Medication.code", note: "Referenced from MedicationRequest.medicationReference" },
+          { hl7: "RXO-2 / RXO-3 / RXO-4", fhir: "...doseAndRate[0].doseRange", note: "Low/high dose amount + units" },
+          { hl7: "RXO-5", fhir: "Medication.form", note: "—" },
+          { hl7: "RXO-9", fhir: "MedicationRequest.substitution.allowedCodeableConcept", note: "—" },
+          { hl7: "RXO-11 / RXO-12 / RXO-13", fhir: "MedicationRequest.dispenseRequest", note: "Amount, units, refills" },
+          { hl7: "RXO-18 / RXO-19 / RXO-25 / RXO-26", fhir: "Medication.ingredient[0].strength", note: "Numerator/denominator + units" },
+          { hl7: "RXR-1", fhir: "...dosageInstruction[0].route", note: "HL7 Table 0161 → v3-RouteOfAdministration" },
+          { hl7: "RXR-2 / RXR-4 / RXR-5", fhir: "...site / .method / .additionalInstruction[0]", note: "—" },
+        ],
+      },
+    ],
+    footnote: "`MedicationRequest.intent` is always `order`. `RXO-14`'s DEA number populates `requester.display` — a display-only Reference.",
+  },
+  {
+    id: "metadata",
+    title: "Message metadata (SFT, MSA) and IAM",
+    description:
+      "Three more segment maps, each attaching to whichever message type already carries the segment rather than being tied to one: SFT and MSA (any message type), IAM (a newer alternative to AL1 in the ADT section above, producing the same AllergyIntolerance resource type).",
+    tables: [
+      {
+        thirdColumn: "notes",
+        rows: [
+          { hl7: "SFT-2 / SFT-3", fhir: "MessageHeader.source.version / .software", note: "—" },
+          { hl7: "MSA-1 / MSA-2", fhir: "MessageHeader.response", note: "HL70008 ack code → ok/transient-error/fatal-error" },
+          { hl7: "IAM-3", fhir: "AllergyIntolerance.code", note: "—" },
+          { hl7: "IAM-5", fhir: "AllergyIntolerance.reaction[0].manifestation[0].text", note: "—" },
+          { hl7: "IAM-7", fhir: "AllergyIntolerance.identifier[0]", note: "Distinguishes an IAM-sourced allergy from an AL1-sourced one" },
+          { hl7: "IAM-11", fhir: "AllergyIntolerance.onsetDateTime", note: "—" },
+        ],
+      },
+    ],
   },
 ];
 
