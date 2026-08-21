@@ -1,7 +1,7 @@
 {
   "name": "hl7-fhir-translator-monorepo",
   "private": true,
-  "version": "0.3.0",
+  "version": "1.0.0",
   "type": "module",
   "description": "Monorepo for hl7-fhir-translator (the published npm package) and its browser demo",
   "license": "MIT",

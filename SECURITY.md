@@ -2,8 +2,8 @@
 
 ## Supported versions
 
-This package is pre-1.0 (`0.x`). Security fixes land on the latest published version;
-older `0.x` versions are not separately patched.
+This package follows semantic versioning as of `v1.0.0`. Security fixes land on the
+latest published `1.x` version; versions before `1.0.0` are not patched.
 
 ## Reporting a vulnerability
 

@@ -3,15 +3,35 @@ export function Changelog() {
     <div>
       <h1 className="mb-2">Changelog</h1>
       <p className="mb-8" style={{ opacity: 0.85 }}>
-        This package is pre-1.0 (<code>0.x</code>) — security fixes land on the latest published version; older 0.x versions are not
-        separately patched. See GitHub Releases for the full history.
+        This package follows semantic versioning as of <code>v1.0.0</code>. See <code>SECURITY.md</code> for the support policy and GitHub
+        Releases for the full history.
       </p>
 
       <div className="flex flex-col gap-6">
+        <div id="v1-0-0" className="border-t pt-3" style={{ borderColor: "var(--color-divider)" }}>
+          <div className="mb-2 flex items-baseline gap-3">
+            <h3 className="m-0">v1.0.0</h3>
+            <span className="text-muted text-sm">current release</span>
+          </div>
+          <div className="mb-2 flex gap-2">
+            <span className="tag tag-accent">Added</span>
+          </div>
+          <ul className="m-0 flex list-disc flex-col gap-1 pl-5" style={{ opacity: 0.85 }}>
+            <li>Full field-level segment coverage across every mapping direction (PID, PV1, PV2, DG1, NK1, IN1, OBR, OBX, SPM, RXA, TQ1, NTE detail fields), per the official IG's segment-level ConceptMaps</li>
+            <li>New resource types: MessageHeader (from MSH, every message type), Provenance (from EVN, ADT + MDM), Device and PractitionerRole (from PRT, ORM/OML), and CareTeam (from ROL + IN3, ADT)</li>
+            <li>
+              Organization, Location, Practitioner, Coverage, and Procedure as real, referenced resources — upgrading several fields that were
+              previously display-only References
+            </li>
+            <li>Appointment.serviceType (from AIS-3) and Appointment.comment (from NTE-3) in SIU^S12</li>
+            <li>A data-driven vocabulary module (HL7 code-table lookups) replacing ad hoc inline switches</li>
+            <li>Reusable HL7v2 datatype converters shared across every segment mapper</li>
+          </ul>
+        </div>
+
         <div id="v0-3-0" className="border-t pt-3" style={{ borderColor: "var(--color-divider)" }}>
           <div className="mb-2 flex items-baseline gap-3">
             <h3 className="m-0">v0.3.0</h3>
-            <span className="text-muted text-sm">current release</span>
           </div>
           <div className="mb-2 flex gap-2">
             <span className="tag tag-accent">Added</span>

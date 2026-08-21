@@ -8,8 +8,8 @@ export function GettingStarted({ goDataMapping }: { goDataMapping: () => void })
       </h1>
       <p style={{ opacity: 0.85 }}>
         hl7-fhir-translator deterministically translates HL7v2 messages to FHIR R4, and back, through a hand-written parser and explicit
-        bidirectional mapping tables. Every output value traces back to a specific HL7v2 field or FHIR path. It is open source, MIT-licensed,
-        and has zero runtime dependencies.
+        bidirectional mapping tables. Every output value traces back to a specific HL7v2 field or FHIR path. It is open source,
+        MIT-licensed, and has zero runtime dependencies.
       </p>
 
       <h2 id="overview" className="mt-8">
@@ -18,7 +18,8 @@ export function GettingStarted({ goDataMapping }: { goDataMapping: () => void })
       <p style={{ opacity: 0.85 }}>
         Translation is a pure function: the same input always produces the same output. There is no network I/O and no persistence — the
         library parses a string and returns a string. It ships as both an ESM and a CommonJS package, runs in Node.js 18+ or any modern
-        browser, and is covered by 143 unit tests across the parser, all eight mapping directions, a docs/code mapping audit, and detection.
+        browser, and is covered by 327 unit tests across the parser, all 14 message-type mapping directions, a docs/code mapping audit, and
+        detection.
       </p>
 
       <h2 id="installation" className="mt-8">
@@ -47,7 +48,7 @@ const result = translateHl7ToFhir(hl7);
 
 result.translated; // FHIR R4 Bundle, pretty-printed JSON string
 result.mappings;   // [{ source: "PID-3", target: "Patient.identifier[0].value", value: "MRN12345" }, ...]
-result.warnings;   // segments/fields with no FHIR mapping, e.g. unmapped NK1`}
+result.warnings;   // segments/fields with no FHIR mapping, e.g. unmapped GT1`}
       />
       <p style={{ opacity: 0.85 }}>
         Both module systems work the same way — <code>require("hl7-fhir-translator")</code> needs no config.

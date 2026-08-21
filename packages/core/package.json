@@ -1,6 +1,6 @@
 {
   "name": "hl7-fhir-translator",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "description": "Deterministic HL7v2 <-> FHIR R4 translator (ADT, ORU, ORM, VXU, SIU, OML, MDM) with a field-level mapping trail and a CLI.",
   "keywords": [
     "hl7",

@@ -1,12 +1,21 @@
-import { findSegment, getComponent, getField } from "../hl7/parser.js";
+import { findSegment, findSegments, getComponent, getField } from "../hl7/parser.js";
 import { field, segment } from "../hl7/serializer.js";
 import { DEFAULT_DELIMITERS, type Hl7Field, type Hl7Message } from "../hl7/types.js";
-import type { Appointment, Bundle, Patient } from "../fhir/types.js";
+import type { Appointment, Bundle, MessageHeader, Patient } from "../fhir/types.js";
 import { FhirValidationError } from "../fhir/types.js";
-import { CODE_SYSTEMS, MappingTrail, buildMsh, fhirDateTimeToHl7, hl7DateTimeToFhir, nextMessageControlId, nowHl7DateTime } from "./common.js";
+import {
+  CODE_SYSTEMS,
+  MappingTrail,
+  buildMsh,
+  fhirDateTimeToHl7,
+  hl7DateTimeToFhir,
+  messageHeaderFromMsh,
+  nextMessageControlId,
+  nowHl7DateTime,
+} from "./common.js";
 import { buildPatientFromPid, buildPidFieldsFromPatient } from "./adt.js";
 
-const KNOWN_SIU_SEGMENTS = new Set(["MSH", "SCH", "PID", "AIL", "AIP"]);
+const KNOWN_SIU_SEGMENTS = new Set(["MSH", "SCH", "PID", "AIL", "AIP", "AIS", "NTE"]);
 
 const FILLER_STATUS_TO_APPOINTMENT_STATUS: Record<string, Appointment["status"]> = {
   BOOKED: "booked",
@@ -28,6 +37,7 @@ export function siuToFhir(message: Hl7Message): { bundle: Bundle; trail: Mapping
   const pid = findSegment(message, "PID");
   const ail = findSegment(message, "AIL");
   const aip = findSegment(message, "AIP");
+  const ais = findSegment(message, "AIS");
 
   if (!sch) throw new FhirValidationError("SIU message is missing a required SCH segment");
   if (!pid) throw new FhirValidationError("SIU message is missing a required PID segment");
@@ -43,6 +53,19 @@ export function siuToFhir(message: Hl7Message): { bundle: Bundle; trail: Mapping
     participant: [{ actor: { reference: `Patient/${patient.id}` }, status: "accepted" }],
   };
   if (fillerStatus) trail.add("SCH-25", "Appointment.status", appointment.status, `HL7 filler status code "${fillerStatus}"`);
+
+  const placerNumber = getField(sch, 1);
+  const fillerNumber = getField(sch, 2);
+  const schIdentifiers = [];
+  if (placerNumber) {
+    schIdentifiers.push({ value: placerNumber, type: { coding: [{ code: "PLAC" }] } });
+    trail.add("SCH-1", "Appointment.identifier", placerNumber, "Placer appointment ID");
+  }
+  if (fillerNumber) {
+    schIdentifiers.push({ value: fillerNumber, type: { coding: [{ code: "FILL" }] } });
+    trail.add("SCH-2", "Appointment.identifier", fillerNumber, "Filler appointment ID");
+  }
+  if (schIdentifiers.length > 0) appointment.identifier = schIdentifiers;
 
   const reasonCode = getComponent(sch, 7, 1);
   const reasonDisplay = getComponent(sch, 7, 2);
@@ -96,6 +119,21 @@ export function siuToFhir(message: Hl7Message): { bundle: Bundle; trail: Mapping
     trail.warn("No AIP segment present — practitioner participant omitted");
   }
 
+  const serviceTypeCode = getComponent(ais, 3, 1);
+  const serviceTypeDisplay = getComponent(ais, 3, 2);
+  if (serviceTypeCode) {
+    appointment.serviceType = [{ coding: [{ code: serviceTypeCode, display: serviceTypeDisplay }], text: serviceTypeDisplay }];
+    trail.add("AIS-3", "Appointment.serviceType[0]", `${serviceTypeCode} (${serviceTypeDisplay ?? "n/a"})`);
+  }
+
+  const notes = findSegments(message, "NTE")
+    .map((nte) => getField(nte, 3))
+    .filter((text): text is string => !!text);
+  if (notes.length > 0) {
+    appointment.comment = notes.join("\n");
+    notes.forEach((text, i) => trail.add(`NTE-3 (#${i + 1})`, "Appointment.comment", text));
+  }
+
   bundle.entry.push({ resource: appointment });
 
   for (const seg of message.segments) {
@@ -103,6 +141,8 @@ export function siuToFhir(message: Hl7Message): { bundle: Bundle; trail: Mapping
       trail.warn(`${seg.id} segment has no FHIR mapping for this message type and was skipped`);
     }
   }
+
+  bundle.entry.push({ resource: messageHeaderFromMsh(message, trail) });
 
   return { bundle, trail };
 }
@@ -120,9 +160,15 @@ export function fhirToSiu(bundle: Bundle): { message: Hl7Message; trail: Mapping
   const controlId = nextMessageControlId();
   const now = nowHl7DateTime();
 
-  const msh = buildMsh(trail, "SIU", "S12", controlId, now);
+  const messageHeader = bundle.entry.find((e) => e.resource.resourceType === "MessageHeader")?.resource as MessageHeader | undefined;
+  const msh = buildMsh(trail, "SIU", "S12", controlId, now, messageHeader);
 
-  const schFields: Record<number, Hl7Field> = { 1: field(`APT${controlId.slice(-6)}`), 2: field(`APT${controlId.slice(-6)}`) };
+  const synthesizedId = `APT${controlId.slice(-6)}`;
+  const placerNumber = appointment.identifier?.[0]?.value ?? synthesizedId;
+  const fillerNumber = appointment.identifier?.[1]?.value ?? synthesizedId;
+  const schFields: Record<number, Hl7Field> = { 1: field(placerNumber), 2: field(fillerNumber) };
+  if (appointment.identifier?.[0]?.value) trail.add("Appointment.identifier[0]", "SCH-1", placerNumber);
+  if (appointment.identifier?.[1]?.value) trail.add("Appointment.identifier[1]", "SCH-2", fillerNumber);
   const reasonCoding = appointment.reasonCode?.[0]?.coding?.[0];
   if (reasonCoding) {
     schFields[7] = field(reasonCoding.code ?? "", reasonCoding.display ?? "");
@@ -150,6 +196,17 @@ export function fhirToSiu(bundle: Bundle): { message: Hl7Message; trail: Mapping
   trail.add("Appointment.status", "SCH-25", fillerStatus);
   const sch = segment("SCH", schFields);
 
+  const serviceTypeCoding = appointment.serviceType?.[0]?.coding?.[0];
+  const aisSegment = serviceTypeCoding?.code
+    ? segment("AIS", { 1: field("1"), 3: field(serviceTypeCoding.code, serviceTypeCoding.display ?? "") })
+    : undefined;
+  if (serviceTypeCoding?.code) {
+    trail.add("Appointment.serviceType[0]", "AIS-3", `${serviceTypeCoding.code} (${serviceTypeCoding.display ?? "n/a"})`);
+  }
+
+  const nteSegment = appointment.comment ? segment("NTE", { 1: field("1"), 3: field(appointment.comment) }) : undefined;
+  if (appointment.comment) trail.add("Appointment.comment", "NTE-3", appointment.comment);
+
   const pidFields = buildPidFieldsFromPatient(patient, trail);
   const pid = segment("PID", { 1: field("1"), ...pidFields });
 
@@ -169,8 +226,11 @@ export function fhirToSiu(bundle: Bundle): { message: Hl7Message; trail: Mapping
     );
   }
 
+  if (aisSegment) segments.push(aisSegment);
+  if (nteSegment) segments.push(nteSegment);
+
   for (const entry of bundle.entry) {
-    if (!["Patient", "Appointment"].includes(entry.resource.resourceType)) {
+    if (!["Patient", "Appointment", "MessageHeader"].includes(entry.resource.resourceType)) {
       trail.warn(`${entry.resource.resourceType} resource has no HL7v2 SIU mapping and was skipped`);
     }
   }

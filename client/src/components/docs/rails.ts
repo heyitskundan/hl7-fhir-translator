@@ -41,6 +41,7 @@ export const dataMappingRail: RailItem[] = [
 ];
 
 export const changelogRail: RailItem[] = [
+  { href: "#v1-0-0", label: "v1.0.0" },
   { href: "#v0-3-0", label: "v0.3.0" },
   { href: "#v0-2-0", label: "v0.2.0" },
   { href: "#v0-1-0", label: "v0.1.0" },

@@ -1,4 +1,13 @@
 MSH|^~\&|HIS|HOSP|ADT|HOSP|20240101120000||ADT^A01|MSG001|P|2.5
-EVN|A01|20240101120000
-PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M|||123 Main St^^Springfield^IL^62701^USA
-PV1|1|I|ICU^101^A^^^HOSP||||1234^Smith^Jane^M^MD
+EVN|A01|20240101120000||01|7802^Rivera^Carlos^^RN|20240101115500|HOSP
+PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M|||123 Main St^^Springfield^IL^62701^USA||5559876543^PRN^PH|||M^Married^HL70002|||123-45-6789|D1234567|||||2|||||N
+PD1|||FAMILY PRACTICE ASSOCIATES|9012^Nguyen^Anh^^MD
+PV1|1|I|ICU^101^A^^^HOSP||||1234^Smith^Jane^M^MD|5678^Johnson^Mary^R^MD|||||||||||VN000123|||||||||||||||||||||||||20240101110000
+PV2|||CHKUP^Annual checkup||||||||||||||||||||||R^Routine^HL70360
+AL1|1|DA|1191^Aspirin^RXNORM|SV|Anaphylaxis|20230101
+DG1|1||E119^Type 2 diabetes mellitus without complications^ICD10||20240101120000|W^Working^HL70052|||||||||1|9012^Nguyen^Anh^^MD
+NK1|1|Doe^Jane^M|SPO|123 Main St^^Springfield^IL^62701^USA|5551234567^PRN^PH|||||||EMP009^^^HOSP|||F|19820310
+IN1|1|PLAN001||Blue Cross|1 Insurance Plaza^^Chicago^IL^60601^USA||||||ACME Corp Group|20240101|20241231||HMO^Health Maintenance Organization|Doe^John^A|SEL
+IN3|1||||||||||||||||||||Diane Okafor
+PR1|1||89050^Appendectomy^CPT||20240101110000|S^Surgical^HL70230|||||||||K35.80^Acute appendicitis^ICD10||||||||OR1
+ROL|1|AD|PP^Primary Care Physician^HL70443|9012^Nguyen^Anh^^MD|20240101080000|20241231235959||FU^Follow-up^HL70443|IM^Internal Medicine^SCT|||5553219876^WPN^PH||Springfield Medical Group

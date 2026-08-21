@@ -122,3 +122,15 @@ export function getComponent(
 export function getRepetitions(segment: Hl7Segment | undefined, fieldNumber: number): string[][] {
   return segment?.fields[fieldNumber]?.reps ?? [];
 }
+
+/**
+ * Returns the raw `Hl7Field` at a 1-indexed field number, or `undefined` if the segment is
+ * missing or the field is empty. Unlike `getField`/`getComponent`, this hands back the
+ * field's full component/repetition structure rather than a single string — for passing
+ * into a datatype converter (`./mapping/datatypes.js`) that needs to read more than one
+ * component, without that converter needing to know which segment/field number it came from.
+ */
+export function getRawField(segment: Hl7Segment | undefined, fieldNumber: number): Hl7Field | undefined {
+  const value = segment?.fields[fieldNumber];
+  return value === undefined || value.raw === "" ? undefined : value;
+}

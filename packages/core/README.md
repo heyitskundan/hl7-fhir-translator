@@ -516,7 +516,7 @@ segment/resource.
 git clone https://github.com/heyitskundan/hl7-fhir-translator.git
 cd hl7-fhir-translator
 npm install
-npm test -w packages/core          # 155 tests: parser, all 14 mapping directions, a docs/code mapping audit, detection, CLI
+npm test -w packages/core          # 327 tests: parser, all 14 mapping directions, a docs/code mapping audit, detection, CLI
 npm run build -w packages/core      # tsup: dual ESM+CJS + type defs + the CLI binary
 ```
 

@@ -1,10 +1,22 @@
 import { findSegment, getComponent, getField } from "../hl7/parser.js";
 import { field, segment } from "../hl7/serializer.js";
 import { DEFAULT_DELIMITERS, type Hl7Field, type Hl7Message } from "../hl7/types.js";
-import type { Bundle, Immunization, Patient } from "../fhir/types.js";
+import type { Bundle, Immunization, MessageHeader, Patient, Practitioner } from "../fhir/types.js";
 import { FhirValidationError } from "../fhir/types.js";
-import { CODE_SYSTEMS, MappingTrail, buildMsh, fhirDateTimeToHl7, hl7DateTimeToFhir, nextMessageControlId, nowHl7DateTime } from "./common.js";
+import {
+  CODE_SYSTEMS,
+  MappingTrail,
+  buildMsh,
+  fhirDateTimeToHl7,
+  hl7DateTimeToFhir,
+  messageHeaderFromMsh,
+  nextMessageControlId,
+  nowHl7DateTime,
+  practitionerFromNameParts,
+  resolvePractitionerName,
+} from "./common.js";
 import { buildPatientFromPid, buildPidFieldsFromPatient } from "./adt.js";
+import { cweToCodeableConcept } from "./datatypes.js";
 
 const KNOWN_VXU_SEGMENTS = new Set(["MSH", "PID", "RXA"]);
 
@@ -78,19 +90,50 @@ export function vxuToFhir(message: Hl7Message): { bundle: Bundle; trail: Mapping
 
   const performerFamily = getComponent(rxa, 10, 2);
   const performerGiven = getComponent(rxa, 10, 3);
+  let practitioner: Practitioner | undefined;
   if (performerFamily) {
     const display = [performerGiven, performerFamily].filter(Boolean).join(" ");
-    immunization.performer = [{ actor: { display } }];
+    practitioner = practitionerFromNameParts(performerFamily, performerGiven, "practitioner-performer");
+    immunization.performer = [{ actor: practitioner ? { reference: `Practitioner/${practitioner.id}`, display } : { display } }];
     trail.add("RXA-10", "Immunization.performer[0].actor.display", display, "Administering provider");
   }
 
+  const statusReason = cweToCodeableConcept(rxa.fields[18]);
+  if (statusReason) {
+    immunization.statusReason = statusReason;
+    trail.add("RXA-18", "Immunization.statusReason", getComponent(rxa, 18, 1) ?? "");
+  }
+
+  const reasonCode = cweToCodeableConcept(rxa.fields[19]);
+  if (reasonCode) {
+    immunization.reasonCode = [reasonCode];
+    trail.add("RXA-19", "Immunization.reasonCode[0]", getComponent(rxa, 19, 1) ?? "");
+  }
+
+  const recorded = hl7DateTimeToFhir(getField(rxa, 22));
+  if (recorded) {
+    immunization.recorded = recorded;
+    trail.add("RXA-22", "Immunization.recorded", recorded);
+  }
+
+  // RXA-27 is PL (Person Location): component 1 is point of care, same convention as
+  // PV1-3.1/PR1-23.1 elsewhere in this codebase.
+  const locationDisplay = getComponent(rxa, 27, 1);
+  if (locationDisplay) {
+    immunization.location = { display: locationDisplay };
+    trail.add("RXA-27", "Immunization.location.display", locationDisplay);
+  }
+
   bundle.entry.push({ resource: immunization });
+  if (practitioner) bundle.entry.push({ resource: practitioner });
 
   for (const seg of message.segments) {
     if (!KNOWN_VXU_SEGMENTS.has(seg.id)) {
       trail.warn(`${seg.id} segment has no FHIR mapping for this message type and was skipped`);
     }
   }
+
+  bundle.entry.push({ resource: messageHeaderFromMsh(message, trail) });
 
   return { bundle, trail };
 }
@@ -108,7 +151,8 @@ export function fhirToVxu(bundle: Bundle): { message: Hl7Message; trail: Mapping
   const controlId = nextMessageControlId();
   const now = nowHl7DateTime();
 
-  const msh = buildMsh(trail, "VXU", "V04", controlId, now);
+  const messageHeader = bundle.entry.find((e) => e.resource.resourceType === "MessageHeader")?.resource as MessageHeader | undefined;
+  const msh = buildMsh(trail, "VXU", "V04", controlId, now, messageHeader);
 
   const pidFields = buildPidFieldsFromPatient(patient, trail);
   const pid = segment("PID", { 1: field("1"), ...pidFields });
@@ -129,11 +173,13 @@ export function fhirToVxu(bundle: Bundle): { message: Hl7Message; trail: Mapping
     rxaFields[7] = field(immunization.doseQuantity.unit ?? "");
     trail.add("Immunization.doseQuantity", "RXA-6", `${immunization.doseQuantity.value} ${immunization.doseQuantity.unit ?? ""}`.trim());
   }
-  if (immunization.performer?.[0]?.actor?.display) {
-    const display = immunization.performer[0]!.actor!.display!;
-    const [given, ...rest] = display.split(" ");
-    rxaFields[10] = field("", rest.join(" ") || given || "", rest.length ? given : "");
-    trail.add("Immunization.performer[0].actor.display", "RXA-10", display);
+  const practitioners = bundle.entry
+    .filter((e): e is { resource: Practitioner; fullUrl?: string } => e.resource.resourceType === "Practitioner")
+    .map((e) => e.resource);
+  const performerName = resolvePractitionerName(immunization.performer?.[0]?.actor, practitioners);
+  if (performerName?.family) {
+    rxaFields[10] = field("", performerName.family, performerName.given ?? "");
+    trail.add("Immunization.performer[0].actor.display", "RXA-10", [performerName.given, performerName.family].filter(Boolean).join(" "));
   }
   if (immunization.lotNumber) {
     rxaFields[15] = field(immunization.lotNumber);
@@ -151,10 +197,29 @@ export function fhirToVxu(bundle: Bundle): { message: Hl7Message; trail: Mapping
   const completionStatus = STATUS_TO_COMPLETION_STATUS[immunization.status] ?? "CP";
   rxaFields[20] = field(completionStatus);
   trail.add("Immunization.status", "RXA-20", completionStatus);
+  const statusReasonCoding = immunization.statusReason?.coding?.[0];
+  if (statusReasonCoding?.code) {
+    rxaFields[18] = field(statusReasonCoding.code, statusReasonCoding.display ?? "");
+    trail.add("Immunization.statusReason", "RXA-18", statusReasonCoding.code);
+  }
+  const reasonCoding = immunization.reasonCode?.[0]?.coding?.[0];
+  if (reasonCoding?.code) {
+    rxaFields[19] = field(reasonCoding.code, reasonCoding.display ?? "");
+    trail.add("Immunization.reasonCode[0]", "RXA-19", reasonCoding.code);
+  }
+  if (immunization.recorded) {
+    const t = fhirDateTimeToHl7(immunization.recorded) ?? "";
+    rxaFields[22] = field(t);
+    trail.add("Immunization.recorded", "RXA-22", t);
+  }
+  if (immunization.location?.display) {
+    rxaFields[27] = field(immunization.location.display);
+    trail.add("Immunization.location.display", "RXA-27", immunization.location.display);
+  }
   const rxa = segment("RXA", rxaFields);
 
   for (const entry of bundle.entry) {
-    if (!["Patient", "Immunization"].includes(entry.resource.resourceType)) {
+    if (!["Patient", "Immunization", "Practitioner", "MessageHeader"].includes(entry.resource.resourceType)) {
       trail.warn(`${entry.resource.resourceType} resource has no HL7v2 VXU mapping and was skipped`);
     }
   }

@@ -53,7 +53,7 @@ export function InputPane({ value, onChange, direction, onDirectionChange, onTra
           }}
           spellCheck={false}
           placeholder={direction === "hl7ToFhir" ? "Paste a raw HL7v2 message…" : "Paste a FHIR R4 resource or Bundle (JSON)…"}
-          className="input absolute inset-0 resize-none font-mono text-sm leading-relaxed whitespace-pre-wrap break-words !text-transparent placeholder:opacity-40"
+          className="input absolute inset-0 resize-none font-mono text-base leading-relaxed whitespace-pre-wrap break-words !text-transparent placeholder:opacity-40"
           style={{ background: "transparent", caretColor: "var(--color-text)" }}
         />
       </div>

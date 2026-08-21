@@ -167,9 +167,9 @@ describe("main (CLI entrypoint)", () => {
 
   it("prints each warning to stderr, prefixed", () => {
     const inFile = join(dir, "in.hl7");
-    writeFileSync(inFile, ADT_A01 + "\rNK1|1|Doe^Jane|SPO");
+    writeFileSync(inFile, ADT_A01 + "\rGT1|1||Doe^John^A");
     main(["-i", inFile]);
-    expect(stderr.some((line) => line.startsWith("warning: ") && line.includes("NK1"))).toBe(true);
+    expect(stderr.some((line) => line.startsWith("warning: ") && line.includes("GT1"))).toBe(true);
   });
 
   it("throws instead of silently exiting when the input file doesn't exist", () => {

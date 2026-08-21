@@ -3,3 +3,5 @@ SCH|APT001|APT001|||||CHECKUP^Annual physical^L|ROUTINE^Routine appointment^L|30
 PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M
 AIL|1||OFFICE1^Clinic Room 1
 AIP|1||1234^Smith^Jane^M^MD
+AIS|1||GENCHECK^General Checkup^L
+NTE|1||Please arrive 15 minutes early with insurance card

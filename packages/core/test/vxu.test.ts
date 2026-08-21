@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { translateFhirToHl7, translateHl7ToFhir } from "../src/translate.js";
 import { fhirToVxu } from "../src/mapping/vxu.js";
-import type { Bundle, Immunization, Patient } from "../src/fhir/types.js";
+import type { Bundle, Immunization, MessageHeader, Patient, Practitioner } from "../src/fhir/types.js";
 
 const VXU_V04 = [
   "MSH|^~\\&|VIS|CLINIC|HIS|HOSP|20240103090000||VXU^V04|MSG010|P|2.5",
@@ -14,9 +14,9 @@ describe("VXU^V04 -> FHIR", () => {
   const result = translateHl7ToFhir(VXU_V04);
   const bundle = JSON.parse(result.translated) as Bundle;
 
-  it("produces a Bundle with a Patient and an Immunization", () => {
+  it("produces a Bundle with a Patient, an Immunization, and a Practitioner", () => {
     const types = bundle.entry.map((e) => e.resource.resourceType);
-    expect(types).toEqual(["Patient", "Immunization"]);
+    expect(types).toEqual(["Patient", "Immunization", "Practitioner", "MessageHeader"]);
   });
 
   it("maps PID demographics correctly", () => {
@@ -48,6 +48,17 @@ describe("VXU^V04 -> FHIR", () => {
   it("produces a non-empty, source-cited mapping trail", () => {
     expect(result.mappings.length).toBeGreaterThan(5);
     expect(result.mappings.every((m) => m.source && m.target && m.value)).toBe(true);
+  });
+
+  it("maps MSH-3/MSH-5/MSH-9 into a MessageHeader", () => {
+    const messageHeader = bundle.entry.find((e) => e.resource.resourceType === "MessageHeader")!.resource as MessageHeader;
+    expect(messageHeader.source.name).toBe("VIS");
+    expect(messageHeader.destination?.[0]?.name).toBe("HIS");
+    expect(messageHeader.eventCoding).toEqual({
+      system: "http://terminology.hl7.org/CodeSystem/v2-0003",
+      code: "V04",
+      display: "VXU^V04",
+    });
   });
 });
 
@@ -104,5 +115,87 @@ describe("malformed VXU input", () => {
       "PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M",
     ].join("\r");
     expect(() => translateHl7ToFhir(noRxa)).toThrow(/RXA/);
+  });
+});
+
+describe("RXA-18/RXA-19/RXA-22 -> Immunization.statusReason/.reasonCode/.recorded", () => {
+  const VXU_WITH_REASON = [
+    "MSH|^~\\&|VIS|CLINIC|HIS|HOSP|20240103090000||VXU^V04|MSG010|P|2.5",
+    "PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M",
+    "RXA|0|1|20240103090000||08^Hepatitis B pediatric^CVX|0.5|mL^milliliter^UCUM|||1234^Smith^Jane^M^MD|||||LOT12345|20250601|MSD^Merck^MVX||01^Routine immunization^HL70162|CP||20240103090000",
+  ].join("\r");
+
+  it("maps RXA-19 to reasonCode[0] and RXA-22 to recorded", () => {
+    const result = translateHl7ToFhir(VXU_WITH_REASON);
+    const bundle = JSON.parse(result.translated) as Bundle;
+    const imm = bundle.entry[1]!.resource as Immunization;
+    expect(imm.reasonCode?.[0]?.coding?.[0]).toEqual({ code: "01", display: "Routine immunization" });
+    expect(imm.recorded).toBe("2024-01-03T09:00:00Z");
+  });
+
+  it("maps RXA-18 to statusReason when present", () => {
+    const notDone = [
+      "MSH|^~\\&|VIS|CLINIC|HIS|HOSP|20240103090000||VXU^V04|MSG010|P|2.5",
+      "PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M",
+      "RXA|0|1|20240103090000||08^Hepatitis B pediatric^CVX|0.5|mL^milliliter^UCUM|||1234^Smith^Jane^M^MD||||||||01114^Patient refusal^NIP0006||RE",
+    ].join("\r");
+    const result = translateHl7ToFhir(notDone);
+    const bundle = JSON.parse(result.translated) as Bundle;
+    const imm = bundle.entry[1]!.resource as Immunization;
+    expect(imm.statusReason?.coding?.[0]).toEqual({ code: "01114", display: "Patient refusal" });
+  });
+
+  it("round-trips reasonCode and recorded back to RXA-19/RXA-22", () => {
+    const forward = translateHl7ToFhir(VXU_WITH_REASON);
+    const reverse = translateFhirToHl7(forward.translated);
+    expect(reverse.translated).toContain("01");
+    expect(reverse.translated).toContain("Routine immunization");
+    expect(reverse.translated).toContain("20240103090000");
+  });
+});
+
+describe("RXA-27 -> Immunization.location", () => {
+  const VXU_WITH_LOCATION = [
+    "MSH|^~\\&|VIS|CLINIC|HIS|HOSP|20240103090000||VXU^V04|MSG010|P|2.5",
+    "PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M",
+    "RXA|0|1|20240103090000||08^Hepatitis B pediatric^CVX|0.5|mL^milliliter^UCUM|||1234^Smith^Jane^M^MD|||||LOT12345|20250601|MSD^Merck^MVX||01^Routine immunization^HL70162|CP||20240103090000|||||PEDS^Pediatric Clinic^HOSP",
+  ].join("\r");
+
+  it("maps the point-of-care component to location.display", () => {
+    const result = translateHl7ToFhir(VXU_WITH_LOCATION);
+    const bundle = JSON.parse(result.translated) as Bundle;
+    const imm = bundle.entry[1]!.resource as Immunization;
+    expect(imm.location?.display).toBe("PEDS");
+  });
+
+  it("round-trips location back to RXA-27", () => {
+    const forward = translateHl7ToFhir(VXU_WITH_LOCATION);
+    const reverse = translateFhirToHl7(forward.translated);
+    const rxaLine = reverse.translated.split("\r").find((l) => l.startsWith("RXA|"));
+    expect(rxaLine).toContain("PEDS");
+  });
+});
+
+describe("RXA-10 -> Immunization.performer (a real Practitioner resource)", () => {
+  const VXU_WITH_PERFORMER = [
+    "MSH|^~\\&|VIS|CLINIC|HIS|HOSP|20240103090000||VXU^V04|MSG010|P|2.5",
+    "PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M",
+    "RXA|0|1|20240103090000||08^Hepatitis B pediatric^CVX|0.5|mL^milliliter^UCUM|||1234^Smith^Jane^M^MD",
+  ].join("\r");
+
+  it("builds a Practitioner from the administering provider, referenced from Immunization.performer[0].actor", () => {
+    const result = translateHl7ToFhir(VXU_WITH_PERFORMER);
+    const bundle = JSON.parse(result.translated) as Bundle;
+    const imm = bundle.entry.find((e) => e.resource.resourceType === "Immunization")!.resource as Immunization;
+    const practitioner = bundle.entry.find((e) => e.resource.resourceType === "Practitioner")!.resource as Practitioner;
+    expect(practitioner.name?.[0]).toEqual({ family: "Smith", given: ["Jane"] });
+    expect(imm.performer?.[0]?.actor).toEqual({ reference: `Practitioner/${practitioner.id}`, display: "Jane Smith" });
+  });
+
+  it("round-trips the performer's structured name back to RXA-10", () => {
+    const forward = translateHl7ToFhir(VXU_WITH_PERFORMER);
+    const reverse = translateFhirToHl7(forward.translated);
+    const rxaLine = reverse.translated.split("\r").find((l) => l.startsWith("RXA|"));
+    expect(rxaLine).toContain("Smith^Jane");
   });
 });
