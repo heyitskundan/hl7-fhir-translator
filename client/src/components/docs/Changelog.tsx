@@ -8,9 +8,9 @@ export function Changelog() {
       </p>
 
       <div className="flex flex-col gap-6">
-        <div id="v1-0-0" className="border-t pt-3" style={{ borderColor: "var(--color-divider)" }}>
+        <div id="v1-0-1" className="border-t pt-3" style={{ borderColor: "var(--color-divider)" }}>
           <div className="mb-2 flex items-baseline gap-3">
-            <h3 className="m-0">v1.0.0</h3>
+            <h3 className="m-0">v1.0.1</h3>
             <span className="text-muted text-sm">current release</span>
           </div>
           <div className="mb-2 flex gap-2">

@@ -32,7 +32,7 @@ export default function App() {
     <div className="min-h-screen">
       <nav className="nav sticky top-0 z-10 flex-wrap" style={{ background: "var(--color-bg)", borderBottom: "1px solid var(--color-divider)" }}>
         <span className="nav-brand">hl7-fhir-translator</span>
-        <span className="tag tag-neutral">v1.0.0</span>
+        <span className="tag tag-neutral">v1.0.1</span>
 
         <div className="seg" role="radiogroup" aria-label="Section">
           <label className="seg-opt">
