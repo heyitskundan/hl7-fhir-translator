@@ -6,7 +6,9 @@ import { FhirValidationError } from "../fhir/types.js";
 import {
   CODE_SYSTEMS,
   MappingTrail,
+  buildMsa,
   buildMsh,
+  buildSft,
   evnFieldsFromProvenance,
   fhirDateTimeToHl7,
   hl7DateTimeToFhir,
@@ -20,7 +22,7 @@ import {
 import { buildPatientFromPid, buildPidFieldsFromPatient } from "./adt.js";
 import { cweToCodeableConcept } from "./datatypes.js";
 
-const KNOWN_MDM_SEGMENTS = new Set(["MSH", "EVN", "PID", "TXA"]);
+const KNOWN_MDM_SEGMENTS = new Set(["MSH", "SFT", "MSA", "EVN", "PID", "TXA"]);
 
 const COMPLETION_STATUS_TO_DOC_STATUS: Record<string, DocumentReference["docStatus"]> = {
   AU: "final",
@@ -181,6 +183,8 @@ export function fhirToMdm(bundle: Bundle): { message: Hl7Message; trail: Mapping
 
   const messageHeader = bundle.entry.find((e) => e.resource.resourceType === "MessageHeader")?.resource as MessageHeader | undefined;
   const msh = buildMsh(trail, "MDM", "T02", controlId, now, messageHeader);
+  const sft = buildSft(trail, messageHeader);
+  const msa = buildMsa(trail, messageHeader);
 
   const evnPractitioners = bundle.entry
     .filter((e): e is { resource: Practitioner; fullUrl?: string } => e.resource.resourceType === "Practitioner")
@@ -260,5 +264,12 @@ export function fhirToMdm(bundle: Bundle): { message: Hl7Message; trail: Mapping
     }
   }
 
-  return { message: { segments: [msh, evn, pid, txa], delimiters, messageType: "MDM^T02" }, trail };
+  return {
+    message: {
+      segments: [msh, ...(sft ? [sft] : []), ...(msa ? [msa] : []), evn, pid, txa],
+      delimiters,
+      messageType: "MDM^T02",
+    },
+    trail,
+  };
 }

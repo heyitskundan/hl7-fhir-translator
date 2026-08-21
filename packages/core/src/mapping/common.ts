@@ -4,6 +4,9 @@ import { field, segment } from "../hl7/serializer.js";
 import type { Hl7Field, Hl7Message, Hl7Segment } from "../hl7/types.js";
 import type { Location, MessageHeader, Practitioner, Provenance, Reference } from "../fhir/types.js";
 import { xcnToNameParts } from "./datatypes.js";
+import { lookupVocabulary, reverseLookupVocabulary } from "./vocabulary.js";
+
+const MSA_ACK_TABLE = "table-hl70008-to-messageheader-response-code";
 
 /** Canonical HL7 Terminology / LOINC system URLs used across every mapper's coded fields. */
 export const CODE_SYSTEMS = {
@@ -171,7 +174,15 @@ export function buildMsh(
   return msh;
 }
 
-/** MSH-3/MSH-5/MSH-9 -> a MessageHeader resource, per the official IG's "Segment MSH to MessageHeader Map". `source.endpoint`/`destination[0].endpoint` are synthesized (see the interface doc comment); real HL7v2 gives no URI for them. */
+/**
+ * MSH-3/MSH-5/MSH-9 -> a MessageHeader resource, per the official IG's "Segment MSH to
+ * MessageHeader Map". `source.endpoint`/`destination[0].endpoint` are synthesized (see the
+ * interface doc comment); real HL7v2 gives no URI for them. Also folds in `SFT-2`/`SFT-3`
+ * (source.version/source.software, per "Segment SFT to MessageHeader Map") and `MSA-1`/
+ * `MSA-2` (response, per "Segment MSA to MessageHeader Map") when either segment is present
+ * — both are metadata about the message itself, so they attach to the same MessageHeader
+ * every message type already produces rather than needing their own call site.
+ */
 export function messageHeaderFromMsh(message: Hl7Message, trail: MappingTrail, id = "messageheader-1"): MessageHeader {
   const msh = findSegment(message, "MSH");
   const sourceName = getField(msh, 3);
@@ -196,7 +207,65 @@ export function messageHeaderFromMsh(message: Hl7Message, trail: MappingTrail, i
     };
     trail.add("MSH-9", "MessageHeader.eventCoding", trigger, `Message type "${category}^${trigger}"`);
   }
+
+  const sft = findSegment(message, "SFT");
+  const version = getField(sft, 2);
+  if (version) {
+    messageHeader.source.version = version;
+    trail.add("SFT-2", "MessageHeader.source.version", version);
+  }
+  const software = getField(sft, 3);
+  if (software) {
+    messageHeader.source.software = software;
+    trail.add("SFT-3", "MessageHeader.source.software", software);
+  }
+
+  const msa = findSegment(message, "MSA");
+  const ackCode = getField(msa, 1);
+  const response = lookupVocabulary(MSA_ACK_TABLE, ackCode);
+  if (response?.code) {
+    messageHeader.response = { code: response.code as "ok" | "transient-error" | "fatal-error" };
+    trail.add("MSA-1", "MessageHeader.response.code", response.code, `HL7 acknowledgment code "${ackCode}"`);
+    const controlId = getField(msa, 2);
+    if (controlId) {
+      messageHeader.response.identifier = controlId;
+      trail.add("MSA-2", "MessageHeader.response.identifier", controlId);
+    }
+  }
+
   return messageHeader;
+}
+
+/** MessageHeader.source.version/.source.software -> an SFT segment, inverse of the SFT half of `messageHeaderFromMsh`. Returns undefined when neither is set. */
+export function buildSft(trail: MappingTrail, messageHeader?: MessageHeader): Hl7Segment | undefined {
+  const version = messageHeader?.source.version;
+  const software = messageHeader?.source.software;
+  if (!version && !software) return undefined;
+  const fields: Record<number, Hl7Field> = {};
+  if (version) {
+    fields[2] = field(version);
+    trail.add("MessageHeader.source.version", "SFT-2", version);
+  }
+  if (software) {
+    fields[3] = field(software);
+    trail.add("MessageHeader.source.software", "SFT-3", software);
+  }
+  return segment("SFT", fields);
+}
+
+/** MessageHeader.response -> an MSA segment, inverse of the MSA half of `messageHeaderFromMsh`. Returns undefined when `response` isn't set. */
+export function buildMsa(trail: MappingTrail, messageHeader?: MessageHeader): Hl7Segment | undefined {
+  const response = messageHeader?.response;
+  if (!response) return undefined;
+  const ackCode = reverseLookupVocabulary(MSA_ACK_TABLE, response.code);
+  if (!ackCode) return undefined;
+  trail.add("MessageHeader.response.code", "MSA-1", ackCode);
+  const fields: Record<number, Hl7Field> = { 1: field(ackCode) };
+  if (response.identifier) {
+    fields[2] = field(response.identifier);
+    trail.add("MessageHeader.response.identifier", "MSA-2", response.identifier);
+  }
+  return segment("MSA", fields);
 }
 
 /**

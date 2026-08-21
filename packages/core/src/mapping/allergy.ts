@@ -5,12 +5,23 @@
  * documented allergy — so this produces zero or more `AllergyIntolerance` resources, not
  * one. Wired into whichever message-type mappers read a PID (currently the ADT mappers;
  * AL1 is common in admission messages) rather than being its own message type.
+ *
+ * `IAM` (the newer "Patient Adverse Reaction Information" segment, per the IG's "Segment
+ * IAM to AllergyIntolerance Map") is handled alongside AL1 in the same file, since both
+ * target the same resource — `iamToAllergyIntolerances` below. Only the fields with a
+ * clear single-valued FHIR target are implemented: `IAM-2`/`IAM-4`'s dual category/severity
+ * vs. criticality encoding (the IG marks these "Required"-binding with extension fallbacks
+ * this package's `CodeableConcept` shape can't carry) and `IAM-14`/`IAM-15`'s
+ * conditional-on-relationship recorder dispatch are left unmapped for the same reason
+ * `AL1`'s onset/criticality overlap is: this package has no per-field way to record which
+ * of two possible interpretations a source value took, so a lossy default would silently
+ * pick one on every round-trip rather than surfacing the ambiguity.
  */
 import { findSegments, getComponent, getField } from "../hl7/parser.js";
 import { field, segment } from "../hl7/serializer.js";
 import type { Hl7Field, Hl7Message, Hl7Segment } from "../hl7/types.js";
 import type { AllergyIntolerance, Patient } from "../fhir/types.js";
-import { cweToCodeableConcept } from "./datatypes.js";
+import { cweToCodeableConcept, cxToIdentifier } from "./datatypes.js";
 import { fhirDateTimeToHl7, hl7DateTimeToFhir, type MappingTrail } from "./common.js";
 import { lookupVocabulary, reverseLookupVocabulary } from "./vocabulary.js";
 
@@ -128,5 +139,78 @@ export function allergyIntolerancesToAl1(allergies: AllergyIntolerance[], trail:
     }
 
     return segment("AL1", fields);
+  });
+}
+
+/** IAM segments -> zero or more AllergyIntolerance resources, one per segment, each referencing `patient`. IDs continue past whatever `al1ToAllergyIntolerances` already produced for the same message, so the two segment types can coexist without id collisions. */
+export function iamToAllergyIntolerances(message: Hl7Message, patient: Patient, trail: MappingTrail, startIndex = 0): AllergyIntolerance[] {
+  const iamSegments = findSegments(message, "IAM");
+  return iamSegments.map((iam, i) => buildOneIamAllergyIntolerance(iam, patient, trail, `allergyintolerance-${startIndex + i + 1}`));
+}
+
+function buildOneIamAllergyIntolerance(iam: Hl7Segment, patient: Patient, trail: MappingTrail, id: string): AllergyIntolerance {
+  const allergy: AllergyIntolerance = {
+    resourceType: "AllergyIntolerance",
+    id,
+    clinicalStatus: { coding: [{ system: "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical", code: "active" }] },
+    patient: { reference: `Patient/${patient.id}` },
+  };
+
+  const identifier = cxToIdentifier(iam.fields[7]);
+  if (identifier) {
+    allergy.identifier = [identifier];
+    trail.add("IAM-7", "AllergyIntolerance.identifier[0]", identifier.value ?? "");
+  }
+
+  const code = cweToCodeableConcept(iam.fields[3]);
+  if (code) {
+    allergy.code = code;
+    trail.add("IAM-3", "AllergyIntolerance.code", getComponent(iam, 3, 1) ?? "");
+  }
+
+  const reactionText = getField(iam, 5);
+  if (reactionText) {
+    allergy.reaction = [{ manifestation: [{ text: reactionText }] }];
+    trail.add("IAM-5", "AllergyIntolerance.reaction[0].manifestation[0].text", reactionText);
+  }
+
+  const onset = hl7DateTimeToFhir(getField(iam, 11));
+  if (onset) {
+    allergy.onsetDateTime = onset;
+    trail.add("IAM-11", "AllergyIntolerance.onsetDateTime", onset);
+  }
+
+  return allergy;
+}
+
+/** AllergyIntolerance resources -> IAM segments, inverse of `iamToAllergyIntolerances`. Only the resources this package can tell came from an IAM segment (those carrying an `identifier`, since AL1-sourced ones never do — see `al1ToAllergyIntolerances`) round-trip back through here; the rest belong to `allergyIntolerancesToAl1`. */
+export function allergyIntolerancesToIam(allergies: AllergyIntolerance[], trail: MappingTrail): Hl7Segment[] {
+  return allergies.map((allergy, i) => {
+    const fields: Record<number, Hl7Field> = { 1: field(String(i + 1)) };
+
+    if (allergy.identifier?.[0]?.value) {
+      fields[7] = field(allergy.identifier[0].value);
+      trail.add("AllergyIntolerance.identifier[0]", "IAM-7", allergy.identifier[0].value);
+    }
+
+    const coding = allergy.code?.coding?.[0];
+    if (coding?.code) {
+      fields[3] = field(coding.code, coding.display ?? "");
+      trail.add("AllergyIntolerance.code", "IAM-3", coding.code);
+    }
+
+    const manifestationText = allergy.reaction?.[0]?.manifestation?.[0]?.text;
+    if (manifestationText) {
+      fields[5] = field(manifestationText);
+      trail.add("AllergyIntolerance.reaction[0].manifestation[0].text", "IAM-5", manifestationText);
+    }
+
+    if (allergy.onsetDateTime) {
+      const hl7Date = fhirDateTimeToHl7(allergy.onsetDateTime) ?? "";
+      fields[11] = field(hl7Date);
+      trail.add("AllergyIntolerance.onsetDateTime", "IAM-11", hl7Date);
+    }
+
+    return segment("IAM", fields);
   });
 }

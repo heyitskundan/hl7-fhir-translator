@@ -3196,6 +3196,23 @@ export const VOCABULARY: Readonly<Record<string, Readonly<Record<string, Vocabul
   "table-hl70912-to-practitioner-role": {
     PH: { code: "pharmacist", display: "Pharmacist", system: "http://terminology.hl7.org/CodeSystem/practitioner-role" },
   },
+  // Table HL70008 to MessageHeader Response Code Map
+  "table-hl70008-to-messageheader-response-code": {
+    AA: { code: "ok", display: "Application Accept", system: "http://hl7.org/fhir/response-code" },
+    CA: { code: "ok", display: "Commit Accept", system: "http://hl7.org/fhir/response-code" },
+    AE: { code: "transient-error", display: "Application Error", system: "http://hl7.org/fhir/response-code" },
+    CE: { code: "transient-error", display: "Commit Error", system: "http://hl7.org/fhir/response-code" },
+    AR: { code: "fatal-error", display: "Application Reject", system: "http://hl7.org/fhir/response-code" },
+    CR: { code: "fatal-error", display: "Commit Reject", system: "http://hl7.org/fhir/response-code" },
+  },
+  // Table HL70161 to Route Of Administration Map (subset actually used by RXR-1 samples this package has seen)
+  "table-hl70161-to-route-of-administration": {
+    PO: { code: "PO", display: "Oral", system: "http://terminology.hl7.org/CodeSystem/v3-RouteOfAdministration" },
+    IV: { code: "IV", display: "Intravenous", system: "http://terminology.hl7.org/CodeSystem/v3-RouteOfAdministration" },
+    IM: { code: "IM", display: "Intramuscular", system: "http://terminology.hl7.org/CodeSystem/v3-RouteOfAdministration" },
+    SC: { code: "SC", display: "Subcutaneous", system: "http://terminology.hl7.org/CodeSystem/v3-RouteOfAdministration" },
+    TOP: { code: "TOP", display: "Topical", system: "http://terminology.hl7.org/CodeSystem/v3-RouteOfAdministration" },
+  },
 };
 
 /** Looks up the FHIR mapping for an HL7v2 code in a given IG vocabulary table (see VOCABULARY's keys). Returns undefined if the table or code is unknown, or if the IG marks that code as unmapped. */

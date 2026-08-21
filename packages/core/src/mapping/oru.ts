@@ -6,7 +6,9 @@ import { FhirValidationError } from "../fhir/types.js";
 import {
   CODE_SYSTEMS,
   MappingTrail,
+  buildMsa,
   buildMsh,
+  buildSft,
   fhirDateTimeToHl7,
   hl7DateTimeToFhir,
   messageHeaderFromMsh,
@@ -17,7 +19,7 @@ import { buildPatientFromPid, buildPidFieldsFromPatient } from "./adt.js";
 import { cweToCodeableConcept, eiToIdentifier } from "./datatypes.js";
 import { lookupVocabulary, reverseLookupVocabulary } from "./vocabulary.js";
 
-const KNOWN_ORU_SEGMENTS = new Set(["MSH", "PID", "OBR", "OBX", "NTE"]);
+const KNOWN_ORU_SEGMENTS = new Set(["MSH", "SFT", "MSA", "PID", "OBR", "OBX", "NTE"]);
 const OBSERVATION_STATUS_TABLE = "table-hl70085-to-observation-status";
 const REPORT_STATUS_TABLE = "table-hl70123-queries-to-diagnostic-report-status";
 const INTERPRETATION_DISPLAY: Record<string, string> = {
@@ -238,6 +240,8 @@ export function fhirToOru(bundle: Bundle): { message: Hl7Message; trail: Mapping
 
   const messageHeader = bundle.entry.find((e) => e.resource.resourceType === "MessageHeader")?.resource as MessageHeader | undefined;
   const msh = buildMsh(trail, "ORU", "R01", controlId, now, messageHeader);
+  const sft = buildSft(trail, messageHeader);
+  const msa = buildMsa(trail, messageHeader);
 
   const pidFields = buildPidFieldsFromPatient(patient, trail);
   const pid = segment("PID", { 1: field("1"), ...pidFields });
@@ -289,7 +293,7 @@ export function fhirToOru(bundle: Bundle): { message: Hl7Message; trail: Mapping
   }
   const obr = segment("OBR", obrFields);
 
-  const segments = [msh, pid, obr];
+  const segments = [msh, ...(sft ? [sft] : []), ...(msa ? [msa] : []), pid, obr];
 
   observations.forEach((obs, i) => {
     const coding = obs.code.coding?.[0];

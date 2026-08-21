@@ -1097,3 +1097,101 @@ describe("PV2-25 -> Encounter.priority", () => {
     expect(pv2Line).toContain("R^Routine");
   });
 });
+
+const ADT_A01_WITH_SFT_MSA = [
+  "MSH|^~\\&|HIS|HOSP|ADT|HOSP|20240101120000||ADT^A01|MSG001|P|2.5",
+  "SFT|Acme Health^^^^^XX^^^12345|3.2.1|OrderEntry",
+  "MSA|AA|MSG000",
+  "EVN|A01|20240101120000",
+  "PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M",
+  "PV1|1|I|ICU^101^A^^^HOSP||||1234^Smith^Jane^M^MD",
+].join("\r");
+
+describe("SFT-2/SFT-3 -> MessageHeader.source.version/.source.software", () => {
+  it("maps SFT-2/SFT-3 onto the same MessageHeader MSH already produces", () => {
+    const result = translateHl7ToFhir(ADT_A01_WITH_SFT_MSA);
+    const bundle = JSON.parse(result.translated) as Bundle;
+    const messageHeader = bundle.entry.find((e) => e.resource.resourceType === "MessageHeader")!.resource as MessageHeader;
+    expect(messageHeader.source.version).toBe("3.2.1");
+    expect(messageHeader.source.software).toBe("OrderEntry");
+  });
+
+  it("round-trips version/software back to SFT-2/SFT-3", () => {
+    const forward = translateHl7ToFhir(ADT_A01_WITH_SFT_MSA);
+    const reverse = translateFhirToHl7(forward.translated);
+    const sftLine = reverse.translated.split("\r").find((l) => l.startsWith("SFT|"));
+    expect(sftLine).toBe("SFT||3.2.1|OrderEntry");
+  });
+});
+
+describe("MSA-1/MSA-2 -> MessageHeader.response", () => {
+  it("maps the HL70008 ack code to a FHIR response-code and carries the control id", () => {
+    const result = translateHl7ToFhir(ADT_A01_WITH_SFT_MSA);
+    const bundle = JSON.parse(result.translated) as Bundle;
+    const messageHeader = bundle.entry.find((e) => e.resource.resourceType === "MessageHeader")!.resource as MessageHeader;
+    expect(messageHeader.response).toEqual({ code: "ok", identifier: "MSG000" });
+  });
+
+  it("round-trips response back to MSA-1/MSA-2", () => {
+    const forward = translateHl7ToFhir(ADT_A01_WITH_SFT_MSA);
+    const reverse = translateFhirToHl7(forward.translated);
+    const msaLine = reverse.translated.split("\r").find((l) => l.startsWith("MSA|"));
+    expect(msaLine).toBe("MSA|AA|MSG000");
+  });
+});
+
+const ADT_A01_WITH_IAM = [
+  "MSH|^~\\&|HIS|HOSP|ADT|HOSP|20240101120000||ADT^A01|MSG001|P|2.5",
+  "EVN|A01|20240101120000",
+  "PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M",
+  "PV1|1|I|ICU^101^A^^^HOSP||||1234^Smith^Jane^M^MD",
+  "IAM|1|DA|7980^Penicillin^RXNORM||Rash||MRN12345^^^HOSP^MR||||20230101",
+].join("\r");
+
+describe("IAM -> AllergyIntolerance", () => {
+  it("produces an AllergyIntolerance carrying an identifier (IAM-7), distinguishing it from an AL1-sourced one", () => {
+    const result = translateHl7ToFhir(ADT_A01_WITH_IAM);
+    const bundle = JSON.parse(result.translated) as Bundle;
+    const allergy = bundle.entry.find((e) => e.resource.resourceType === "AllergyIntolerance")!.resource as AllergyIntolerance;
+    expect(allergy.code?.coding?.[0]?.code).toBe("7980");
+    expect(allergy.reaction?.[0]?.manifestation?.[0]?.text).toBe("Rash");
+    expect(allergy.onsetDateTime).toBe("2023-01-01");
+    expect(allergy.identifier?.[0]?.value).toBe("MRN12345");
+  });
+
+  it("round-trips back to an IAM segment, not AL1", () => {
+    const forward = translateHl7ToFhir(ADT_A01_WITH_IAM);
+    const reverse = translateFhirToHl7(forward.translated);
+    expect(reverse.translated.split("\r").some((l) => l.startsWith("IAM|"))).toBe(true);
+    expect(reverse.translated.split("\r").some((l) => l.startsWith("AL1|"))).toBe(false);
+  });
+});
+
+const ADT_A40 = [
+  "MSH|^~\\&|HIS|HOSP|ADT|HOSP|20240101120000||ADT^A40|MSG001|P|2.5",
+  "EVN|A40|20240101120000",
+  "PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M",
+  "MRG|||MRN99999^^^HOSP^MR",
+].join("\r");
+
+describe("ADT^A40 (merge patient) -> FHIR", () => {
+  it("produces a Patient and an Account carrying the retired identifier from MRG-3", () => {
+    const result = translateHl7ToFhir(ADT_A40);
+    const bundle = JSON.parse(result.translated) as Bundle;
+    const patient = bundle.entry.find((e) => e.resource.resourceType === "Patient")!.resource as Patient;
+    const account = bundle.entry.find((e) => e.resource.resourceType === "Account")!.resource as { status: string; subject?: { reference?: string }[]; identifier?: { value?: string }[] };
+    expect(account.status).toBe("unknown");
+    expect(account.subject?.[0]?.reference).toBe(`Patient/${patient.id}`);
+    expect(account.identifier?.[0]?.value).toBe("MRN99999");
+  });
+});
+
+describe("FHIR Patient+Account -> ADT^A40", () => {
+  it("round-trips back to MRG-3, and derives the A40 trigger from the Account resource's presence", () => {
+    const forward = translateHl7ToFhir(ADT_A40);
+    const reverse = translateFhirToHl7(forward.translated);
+    expect(reverse.translated.split("\r")[0]).toContain("ADT^A40");
+    const mrgLine = reverse.translated.split("\r").find((l) => l.startsWith("MRG|"));
+    expect(mrgLine).toBe("MRG|||MRN99999");
+  });
+});

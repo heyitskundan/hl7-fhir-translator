@@ -6,7 +6,9 @@ import { FhirValidationError } from "../fhir/types.js";
 import {
   CODE_SYSTEMS,
   MappingTrail,
+  buildMsa,
   buildMsh,
+  buildSft,
   fhirDateTimeToHl7,
   hl7DateTimeToFhir,
   messageHeaderFromMsh,
@@ -15,7 +17,7 @@ import {
 } from "./common.js";
 import { buildPatientFromPid, buildPidFieldsFromPatient } from "./adt.js";
 
-const KNOWN_SIU_SEGMENTS = new Set(["MSH", "SCH", "PID", "AIL", "AIP", "AIS", "NTE"]);
+const KNOWN_SIU_SEGMENTS = new Set(["MSH", "SFT", "MSA", "SCH", "PID", "AIL", "AIP", "AIS", "NTE"]);
 
 const FILLER_STATUS_TO_APPOINTMENT_STATUS: Record<string, Appointment["status"]> = {
   BOOKED: "booked",
@@ -162,6 +164,8 @@ export function fhirToSiu(bundle: Bundle): { message: Hl7Message; trail: Mapping
 
   const messageHeader = bundle.entry.find((e) => e.resource.resourceType === "MessageHeader")?.resource as MessageHeader | undefined;
   const msh = buildMsh(trail, "SIU", "S12", controlId, now, messageHeader);
+  const sft = buildSft(trail, messageHeader);
+  const msa = buildMsa(trail, messageHeader);
 
   const synthesizedId = `APT${controlId.slice(-6)}`;
   const placerNumber = appointment.identifier?.[0]?.value ?? synthesizedId;
@@ -210,7 +214,7 @@ export function fhirToSiu(bundle: Bundle): { message: Hl7Message; trail: Mapping
   const pidFields = buildPidFieldsFromPatient(patient, trail);
   const pid = segment("PID", { 1: field("1"), ...pidFields });
 
-  const segments = [msh, sch, pid];
+  const segments = [msh, ...(sft ? [sft] : []), ...(msa ? [msa] : []), sch, pid];
 
   // The first non-patient participant (if any) is written back as the AIL location; any
   // further participants (e.g. a practitioner) can't be distinguished from a location by

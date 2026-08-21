@@ -2,6 +2,7 @@ import { findSegment, findSegments, getComponent, getField } from "../hl7/parser
 import { field, segment } from "../hl7/serializer.js";
 import { DEFAULT_DELIMITERS, type Hl7Field, type Hl7Message, type Hl7Segment } from "../hl7/types.js";
 import type {
+  Account,
   AllergyIntolerance,
   Bundle,
   CareTeam,
@@ -22,7 +23,9 @@ import { FhirValidationError } from "../fhir/types.js";
 import {
   CODE_SYSTEMS,
   MappingTrail,
+  buildMsa,
   buildMsh,
+  buildSft,
   evnFieldsFromProvenance,
   fhirDateTimeToHl7,
   fhirEncounterClassToHl7,
@@ -38,7 +41,8 @@ import {
   provenanceFromEvn,
   resolvePractitionerName,
 } from "./common.js";
-import { al1ToAllergyIntolerances, allergyIntolerancesToAl1 } from "./allergy.js";
+import { al1ToAllergyIntolerances, allergyIntolerancesToAl1, allergyIntolerancesToIam, iamToAllergyIntolerances } from "./allergy.js";
+import { accountsToMrg, mrgToAccounts } from "./mrg.js";
 import { conditionsToDg1, dg1ToConditions, dg1ToEncounterDiagnoses } from "./condition.js";
 import { nk1ToRelatedPersons, relatedPersonsToNk1 } from "./relatedperson.js";
 import { coveragesToIn1, in1ToCoverages } from "./coverage.js";
@@ -47,10 +51,28 @@ import { pr1ToProcedures, proceduresToPr1 } from "./procedure.js";
 import { cweToCodeableConcept, xtnToContactPoint } from "./datatypes.js";
 import { lookupVocabulary, reverseLookupVocabulary } from "./vocabulary.js";
 
-const KNOWN_ADT_SEGMENTS = new Set(["MSH", "EVN", "PID", "PV1", "AL1", "DG1", "NK1", "IN1", "IN3", "PR1", "PD1", "PV2", "ROL"]);
+const KNOWN_ADT_SEGMENTS = new Set([
+  "MSH",
+  "SFT",
+  "MSA",
+  "EVN",
+  "PID",
+  "PV1",
+  "AL1",
+  "IAM",
+  "DG1",
+  "NK1",
+  "IN1",
+  "IN3",
+  "PR1",
+  "PD1",
+  "PV2",
+  "ROL",
+  "MRG",
+]);
 const MARITAL_STATUS_TABLE = "table-hl70002-to-v3-maritalstatus";
 /** ADT^A17 has no clear per-patient ownership for a repeating optional segment like AL1 in a two-patient swap message, so it's deliberately not attached to either patient there — if present, it's warned about like any other unmapped segment for that trigger, rather than silently guessed at. */
-const KNOWN_ADT_A17_SEGMENTS = new Set(["MSH", "EVN", "PID", "PV1"]);
+const KNOWN_ADT_A17_SEGMENTS = new Set(["MSH", "SFT", "MSA", "EVN", "PID", "PV1"]);
 
 /**
  * `Encounter.status` per ADT trigger event. The official v2-to-FHIR IG's ADT mapping
@@ -509,8 +531,16 @@ export function adtToFhir(message: Hl7Message): { bundle: Bundle; trail: Mapping
     trail.warn("No PV1 segment present — Encounter resource omitted");
   }
 
-  for (const allergy of al1ToAllergyIntolerances(message, patient, trail)) {
+  const al1Allergies = al1ToAllergyIntolerances(message, patient, trail);
+  for (const allergy of al1Allergies) {
     bundle.entry.push({ resource: allergy });
+  }
+  for (const allergy of iamToAllergyIntolerances(message, patient, trail, al1Allergies.length)) {
+    bundle.entry.push({ resource: allergy });
+  }
+
+  for (const account of mrgToAccounts(message, patient, trail)) {
+    bundle.entry.push({ resource: account });
   }
 
   const { conditions, practitioners: dg1Practitioners } = dg1ToConditions(message, patient, trail);
@@ -673,6 +703,8 @@ function fhirToAdtA17(bundle: Bundle, patients: Patient[], trail: MappingTrail):
 
   const messageHeader = bundle.entry.find((e) => e.resource.resourceType === "MessageHeader")?.resource as MessageHeader | undefined;
   const msh = buildMsh(trail, "ADT", "A17", controlId, now, messageHeader);
+  const sft = buildSft(trail, messageHeader);
+  const msa = buildMsa(trail, messageHeader);
 
   const practitioners = bundle.entry
     .filter((e): e is { resource: Practitioner; fullUrl?: string } => e.resource.resourceType === "Practitioner")
@@ -682,7 +714,7 @@ function fhirToAdtA17(bundle: Bundle, patients: Patient[], trail: MappingTrail):
     .map((e) => e.resource);
   const provenance = bundle.entry.find((e) => e.resource.resourceType === "Provenance")?.resource as Provenance | undefined;
   const evn = segment("EVN", { 1: field("A17"), 2: field(now), ...evnFieldsFromProvenance(provenance, practitioners, locations, trail) });
-  const segments: Hl7Segment[] = [msh, evn];
+  const segments: Hl7Segment[] = [msh, ...(sft ? [sft] : []), ...(msa ? [msa] : []), evn];
 
   patients.forEach((patient, i) => {
     const pidFields = buildPidFieldsFromPatient(patient, trail);
@@ -734,7 +766,11 @@ export function fhirToAdt(bundle: Bundle): { message: Hl7Message; trail: Mapping
   const encounter = bundle.entry.find(
     (e): e is { resource: Encounter; fullUrl?: string } => e.resource.resourceType === "Encounter",
   )?.resource;
-  const messageTypeTrigger = triggerForStatus(encounter?.status);
+  const hasAccount = bundle.entry.some((e) => e.resource.resourceType === "Account");
+  // An Account resource only ever comes from an MRG segment (see mrg.ts), so its presence
+  // is a firmer trigger signal than Encounter.status — A40 (merge patient) overrides
+  // whatever triggerForStatus would otherwise pick.
+  const messageTypeTrigger = hasAccount ? "A40" : triggerForStatus(encounter?.status);
 
   const delimiters = DEFAULT_DELIMITERS;
   const controlId = nextMessageControlId();
@@ -742,6 +778,8 @@ export function fhirToAdt(bundle: Bundle): { message: Hl7Message; trail: Mapping
 
   const messageHeader = bundle.entry.find((e) => e.resource.resourceType === "MessageHeader")?.resource as MessageHeader | undefined;
   const msh = buildMsh(trail, "ADT", messageTypeTrigger, controlId, now, messageHeader);
+  const sft = buildSft(trail, messageHeader);
+  const msa = buildMsa(trail, messageHeader);
 
   const practitioners = bundle.entry
     .filter((e): e is { resource: Practitioner; fullUrl?: string } => e.resource.resourceType === "Practitioner")
@@ -760,7 +798,7 @@ export function fhirToAdt(bundle: Bundle): { message: Hl7Message; trail: Mapping
   const pidFields = buildPidFieldsFromPatient(patient, trail);
   const pid = segment("PID", { 1: field("1"), ...pidFields });
 
-  const segments = [msh, evn, pid];
+  const segments = [msh, ...(sft ? [sft] : []), ...(msa ? [msa] : []), evn, pid];
 
   const pd1 = buildPd1FromPatient(patient, trail);
   if (pd1) segments.push(pd1);
@@ -776,7 +814,13 @@ export function fhirToAdt(bundle: Bundle): { message: Hl7Message; trail: Mapping
   const allergies = bundle.entry
     .filter((e): e is { resource: AllergyIntolerance; fullUrl?: string } => e.resource.resourceType === "AllergyIntolerance")
     .map((e) => e.resource);
-  segments.push(...allergyIntolerancesToAl1(allergies, trail));
+  // AL1 carries no identifier field, so an AllergyIntolerance with one only ever came from
+  // IAM (see allergy.ts) — that's the sole signal available to route each resource back to
+  // the segment type it came from.
+  const al1Allergies = allergies.filter((a) => !a.identifier?.[0]?.value);
+  const iamAllergies = allergies.filter((a) => a.identifier?.[0]?.value);
+  segments.push(...allergyIntolerancesToAl1(al1Allergies, trail));
+  segments.push(...allergyIntolerancesToIam(iamAllergies, trail));
 
   const conditions = bundle.entry
     .filter((e): e is { resource: Condition; fullUrl?: string } => e.resource.resourceType === "Condition")
@@ -806,6 +850,11 @@ export function fhirToAdt(bundle: Bundle): { message: Hl7Message; trail: Mapping
   segments.push(...rolSegments);
   if (in3) segments.push(in3);
 
+  const accounts = bundle.entry
+    .filter((e): e is { resource: Account; fullUrl?: string } => e.resource.resourceType === "Account")
+    .map((e) => e.resource);
+  segments.push(...accountsToMrg(accounts, trail));
+
   const adtHandledResourceTypes = new Set([
     "Patient",
     "Encounter",
@@ -820,6 +869,7 @@ export function fhirToAdt(bundle: Bundle): { message: Hl7Message; trail: Mapping
     "MessageHeader",
     "Provenance",
     "CareTeam",
+    "Account",
   ]);
   for (const entry of bundle.entry) {
     if (!adtHandledResourceTypes.has(entry.resource.resourceType)) {

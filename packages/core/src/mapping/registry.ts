@@ -9,6 +9,7 @@ import { vxuToFhir, fhirToVxu } from "./vxu.js";
 import { siuToFhir, fhirToSiu } from "./siu.js";
 import { omlToFhir, fhirToOml } from "./oml.js";
 import { mdmToFhir, fhirToMdm } from "./mdm.js";
+import { rdeToFhir, fhirToRde } from "./rde.js";
 
 /** One HL7v2 message type (category^trigger) this package knows how to translate, in both directions. */
 export interface SupportedMessageType {
@@ -27,12 +28,14 @@ export const SUPPORTED_MESSAGE_TYPES: SupportedMessageType[] = [
   { category: "ADT", trigger: "A09", description: "Patient departing — tracking" },
   { category: "ADT", trigger: "A11", description: "Cancel admit / cancel visit" },
   { category: "ADT", trigger: "A17", description: "Swap patients" },
+  { category: "ADT", trigger: "A40", description: "Merge patient — patient identifier list" },
   { category: "ORU", trigger: "R01", description: "Unsolicited observation / lab result" },
   { category: "ORM", trigger: "O01", description: "General order" },
   { category: "VXU", trigger: "V04", description: "Unsolicited vaccination record update" },
   { category: "SIU", trigger: "S12", description: "Appointment scheduling — new appointment" },
   { category: "OML", trigger: "O21", description: "Laboratory order" },
   { category: "MDM", trigger: "T02", description: "Document notification — original document" },
+  { category: "RDE", trigger: "O11", description: "Pharmacy/treatment encoded order" },
 ];
 
 /** True if `category^trigger` is one this package can translate, per SUPPORTED_MESSAGE_TYPES. */
@@ -68,12 +71,14 @@ interface RoutingRule {
 
 const ROUTING_RULES: readonly RoutingRule[] = [
   { category: "OML", requires: ["Specimen"] },
+  { category: "RDE", requires: ["MedicationRequest"] },
   { category: "ORM", requires: ["ServiceRequest"] },
   { category: "ORU", requires: ["DiagnosticReport"] },
   { category: "VXU", requires: ["Immunization"] },
   { category: "SIU", requires: ["Appointment"] },
   { category: "MDM", requires: ["DocumentReference"] },
   { category: "ADT", trigger: "A17", requires: ["Patient"], minCount: 2 },
+  { category: "ADT", trigger: "A40", requires: ["Account"] },
   { category: "ADT", trigger: "A01", requires: ["Patient"] },
 ];
 
@@ -156,6 +161,11 @@ export function hl7ToFhirByMessageType(message: Hl7Message): { bundle: Bundle; t
         throw new FhirValidationError(`Unsupported MDM trigger event "${trigger}". Supported: T02.`);
       }
       return mdmToFhir(message);
+    case "RDE":
+      if (trigger !== "O11") {
+        throw new FhirValidationError(`Unsupported RDE trigger event "${trigger}". Supported: O11.`);
+      }
+      return rdeToFhir(message);
     default:
       throw new FhirValidationError(
         `Unsupported HL7v2 message type "${message.messageType}". Supported: ${SUPPORTED_MESSAGE_TYPES.map((t) => `${t.category}^${t.trigger}`).join(", ")}.`,
@@ -168,6 +178,7 @@ export function fhirToHl7ByResourceType(bundle: Bundle): { message: Hl7Message; 
   const types = bundle.entry.map((e) => e.resource.resourceType);
   const target = detectTargetMessageType(types);
   if (target?.category === "OML") return fhirToOml(bundle);
+  if (target?.category === "RDE") return fhirToRde(bundle);
   if (target?.category === "ORM") return fhirToOrm(bundle);
   if (target?.category === "ORU") return fhirToOru(bundle);
   if (target?.category === "VXU") return fhirToVxu(bundle);
@@ -175,6 +186,6 @@ export function fhirToHl7ByResourceType(bundle: Bundle): { message: Hl7Message; 
   if (target?.category === "MDM") return fhirToMdm(bundle);
   if (target?.category === "ADT") return fhirToAdt(bundle);
   throw new FhirValidationError(
-    "Bundle must contain a Patient, DiagnosticReport, ServiceRequest, Specimen, Immunization, Appointment, or DocumentReference resource to determine the target HL7v2 message type.",
+    "Bundle must contain a Patient, DiagnosticReport, ServiceRequest, Specimen, MedicationRequest, Immunization, Appointment, or DocumentReference resource to determine the target HL7v2 message type.",
   );
 }

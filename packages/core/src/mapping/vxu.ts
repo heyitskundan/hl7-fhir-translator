@@ -6,7 +6,9 @@ import { FhirValidationError } from "../fhir/types.js";
 import {
   CODE_SYSTEMS,
   MappingTrail,
+  buildMsa,
   buildMsh,
+  buildSft,
   fhirDateTimeToHl7,
   hl7DateTimeToFhir,
   messageHeaderFromMsh,
@@ -18,7 +20,7 @@ import {
 import { buildPatientFromPid, buildPidFieldsFromPatient } from "./adt.js";
 import { cweToCodeableConcept } from "./datatypes.js";
 
-const KNOWN_VXU_SEGMENTS = new Set(["MSH", "PID", "RXA"]);
+const KNOWN_VXU_SEGMENTS = new Set(["MSH", "SFT", "MSA", "PID", "RXA"]);
 
 const COMPLETION_STATUS_TO_STATUS: Record<string, Immunization["status"]> = {
   CP: "completed",
@@ -153,6 +155,8 @@ export function fhirToVxu(bundle: Bundle): { message: Hl7Message; trail: Mapping
 
   const messageHeader = bundle.entry.find((e) => e.resource.resourceType === "MessageHeader")?.resource as MessageHeader | undefined;
   const msh = buildMsh(trail, "VXU", "V04", controlId, now, messageHeader);
+  const sft = buildSft(trail, messageHeader);
+  const msa = buildMsa(trail, messageHeader);
 
   const pidFields = buildPidFieldsFromPatient(patient, trail);
   const pid = segment("PID", { 1: field("1"), ...pidFields });
@@ -224,5 +228,8 @@ export function fhirToVxu(bundle: Bundle): { message: Hl7Message; trail: Mapping
     }
   }
 
-  return { message: { segments: [msh, pid, rxa], delimiters, messageType: "VXU^V04" }, trail };
+  return {
+    message: { segments: [msh, ...(sft ? [sft] : []), ...(msa ? [msa] : []), pid, rxa], delimiters, messageType: "VXU^V04" },
+    trail,
+  };
 }

@@ -23,6 +23,9 @@ message type never requires renumbering anything else in this document or in
 - [SIU^S12 (appointment scheduling)](#sius12-appointment-scheduling)
 - [OML^O21 (laboratory order)](#omlo21-laboratory-order)
 - [MDM^T02 (document management)](#mdmt02-document-management)
+- [ADT^A40 (merge patient)](#adta40-merge-patient)
+- [RDE^O11 (pharmacy/treatment encoded order)](#rdeo11-pharmacytreatment-encoded-order)
+- [Message metadata (SFT, MSA) and IAM](#message-metadata-sft-msa-and-iam-patient-adverse-reaction-information)
 - [Adding a new message type](#adding-a-new-message-type)
 - [Detection rules (`inspectInput`)](#detection-rules-inspectinput)
 
@@ -2080,6 +2083,358 @@ since `EVN-5` is populated here) with its own `Practitioner`/`Location`, and a t
   "identifier": [{ "value": "DOC-ALT-001" }],
   "description": "Discharge summary for admission 2024-01-06",
   "securityLabel": [{ "coding": [{ "code": "R", "display": "Restricted" }], "text": "Restricted" }]
+}
+```
+
+---
+
+## ADT^A40 (merge patient)
+
+`A40` retires one patient identity into another — HL7v2 carries the identifier being
+retired in an `MRG` segment alongside the surviving patient's own `PID`. This package models
+that as an `Account` referencing the surviving `Patient`, per the official IG's "Segment MRG
+to Account Map" (`ConceptMap-segment-mrg-to-account.html`, fetched directly). `MRG-1`/`-2`/
+`-4`/`-5`/`-6`/`-7` (the retired patient/visit identifiers and name) have no FHIR target in
+the IG's own map and aren't implemented.
+
+**Segments read**: `MSH`, `EVN`, `PID`, `MRG`
+**Resources produced**: `Patient`, `Account` (one per `MRG` segment), `MessageHeader` (from
+`MSH`, always produced)
+
+### Forward: HL7v2 → FHIR
+
+Patient fields follow the same `PID` table as `ADT^A01` above. Merge fields:
+
+| HL7v2 field | FHIR path             | Notes                                                                                                                     |
+| ----------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `MRG-3`     | `Account.identifier[0]` | Prior patient account number (CX), the retired identity now folded into `PID`'s patient                                    |
+| `MSH-3`     | `MessageHeader.source.name` | Sending application; endpoint synthesized as `urn:hl7v2:<name>`                                                        |
+| `MSH-5`     | `MessageHeader.destination[0].name` | Receiving application, synthesized the same way                                                                |
+| `MSH-9`     | `MessageHeader.eventCoding` | Trigger event code/display                                                                                              |
+
+`Account.status` is always `"unknown"` — `MRG` carries no status signal, and the IG's own
+mapping notes the prior account may already be active or inactive with nothing here to
+distinguish the two. `Account.subject` always references the surviving `Patient` (the one
+built from this message's `PID`), not a second `Patient` for the retired identity — HL7v2's
+`MRG` never carries enough of the retired patient's demographics to build one.
+
+### Reverse: FHIR → HL7v2
+
+| FHIR path                | HL7v2 field | Notes                                                    |
+| ------------------------- | ----------- | --------------------------------------------------------- |
+| `Account.identifier[0]`   | `MRG-3`     |                                                           |
+
+`MSH-9`/`EVN-1` are always written as `A40` when the bundle contains an `Account` resource —
+this is also how the reverse router (`registry.ts`) distinguishes an `A40` bundle from a
+single-patient `A01` one, the same way `A17` is distinguished by counting `Patient`
+occurrences: `Account` presence is checked before falling back to `Encounter.status`.
+
+### Not mapped
+
+Any segment other than `MSH`/`EVN`/`PID`/`MRG` is warned about and skipped; any FHIR resource
+other than `Patient`/`Account`/`MessageHeader` is likewise warned about and skipped on the
+reverse direction.
+
+### Worked example
+
+Input (`samples/adt_a40.hl7`):
+
+```hl7
+MSH|^~\&|HIS|HOSP|ADT|HOSP|20240101120000||ADT^A40|MSG020|P|2.5
+EVN|A40|20240101120000
+PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M
+MRG|||MRN99999^^^HOSP^MR
+```
+
+Output (`translateHl7ToFhir` — a 3-entry Bundle: `Patient`, `Account`, `MessageHeader`; no
+`Encounter`, since this message has no `PV1`):
+
+```json
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "patient-1",
+        "identifier": [{ "value": "MRN12345", "assigner": { "display": "HOSP" }, "type": { "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/v2-0203", "code": "MR" }] } }],
+        "name": [{ "family": "Doe", "given": ["John", "A"] }],
+        "birthDate": "1980-05-15",
+        "gender": "male"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Account",
+        "id": "account-1",
+        "status": "unknown",
+        "subject": [{ "reference": "Patient/patient-1" }],
+        "identifier": [{ "value": "MRN99999", "assigner": { "display": "HOSP" }, "type": { "coding": [{ "code": "MR" }] } }]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MessageHeader",
+        "id": "messageheader-1",
+        "source": { "name": "HIS", "endpoint": "urn:hl7v2:HIS" },
+        "destination": [{ "name": "ADT", "endpoint": "urn:hl7v2:ADT" }],
+        "eventCoding": { "system": "http://terminology.hl7.org/CodeSystem/v2-0003", "code": "A40", "display": "ADT^A40" }
+      }
+    }
+  ]
+}
+```
+
+---
+
+## RDE^O11 (pharmacy/treatment encoded order)
+
+A pharmacy order — HL7v2's `RXO`/`RXR` segments map to a `MedicationRequest` referencing a
+`Medication`, per the official IG's "Segment RXO to MedicationRequest Map" and "Segment RXR
+to MedicationRequest Map" (`ConceptMap-segment-rxo-to-medicationrequest.html` /
+`-rxr-to-medicationrequest.html`, fetched directly).
+
+**Segments read**: `MSH`, `PID`, `ORC`, `RXO`, `RXR` (optional)
+**Resources produced**: `Patient`, `Medication`, `MedicationRequest`, `MessageHeader` (from
+`MSH`, always produced)
+
+### Forward: HL7v2 → FHIR
+
+Patient fields follow the same `PID` table as `ADT^A01` above. Order fields:
+
+| HL7v2 field | FHIR path                                                                | Notes                                                                                      |
+| ----------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `ORC-1`     | `MedicationRequest.status`                                                | `NW`→`active`, `CA`→`cancelled`, `CM`→`completed`; else `active`                            |
+| `RXO-1`     | `Medication.code`                                                          | Requested give code, referenced from `MedicationRequest.medicationReference`                |
+| `RXO-2`     | `MedicationRequest.dosageInstruction[0].doseAndRate[0].doseRange.low`      | Requested give amount — minimum                                                              |
+| `RXO-3`     | `MedicationRequest.dosageInstruction[0].doseAndRate[0].doseRange.high`     | Requested give amount — maximum                                                              |
+| `RXO-4`     | `...doseRange.low/.high.code` (or `.unit`)                                 | Give amount units; coded when `RXO-4.1`/`.3` are valued, else free-text unit                  |
+| `RXO-5`     | `Medication.form`                                                          | Requested dosage form                                                                        |
+| `RXO-9`     | `MedicationRequest.substitution.allowedCodeableConcept`                   | Allow substitutions                                                                          |
+| `RXO-11`    | `MedicationRequest.dispenseRequest.quantity.value`                         | Requested dispense amount                                                                    |
+| `RXO-12`    | `MedicationRequest.dispenseRequest.quantity.code`/`.unit`                  | Dispense amount units                                                                        |
+| `RXO-13`    | `MedicationRequest.dispenseRequest.numberOfRepeatsAllowed`                 | Number of refills                                                                             |
+| `RXO-14`    | `MedicationRequest.requester.display`                                     | Ordering provider's DEA number — a display-only Reference, since RXO-14 carries no name      |
+| `RXO-18`    | `Medication.ingredient[0].strength.numerator.value`                       | Requested give strength                                                                      |
+| `RXO-19`    | `...strength.numerator.code`/`.unit`                                      | Strength units                                                                                |
+| `RXO-25`    | `Medication.ingredient[0].strength.denominator.value`                     | Requested drug strength volume                                                                |
+| `RXO-26`    | `...strength.denominator.code`/`.unit`                                    | Strength volume units                                                                         |
+| `RXR-1`     | `MedicationRequest.dosageInstruction[0].route`                             | HL7 Table 0161 → `v3-RouteOfAdministration`, via `table-hl70161-to-route-of-administration`   |
+| `RXR-2`     | `MedicationRequest.dosageInstruction[0].site`                              | Administration site                                                                           |
+| `RXR-4`     | `MedicationRequest.dosageInstruction[0].method`                            | Administration method                                                                         |
+| `RXR-5`     | `MedicationRequest.dosageInstruction[0].additionalInstruction[0]`          | Routing instruction                                                                           |
+| `MSH-3`     | `MessageHeader.source.name`                                                | Sending application; endpoint synthesized as `urn:hl7v2:<name>`                              |
+| `MSH-5`     | `MessageHeader.destination[0].name`                                        | Receiving application, synthesized the same way                                              |
+| `MSH-9`     | `MessageHeader.eventCoding`                                                | Trigger event code/display                                                                   |
+
+`MedicationRequest.intent` is always `order`. RXO fields the IG itself marks "No mapping"
+(`RXO-6`/`7`/`8`/`10`/`15`/`16`/`17`/`20`/`21`/`22`/`24`, `RXO-27` through `RXO-36`) are
+skipped, matching the IG's own scope. `RXO-19`'s cross-reference into the neighboring `RXE`
+segment (total daily dose) isn't implemented — this package doesn't otherwise model `RXE`,
+and adding it for one field would mean carrying a whole extra segment shape for a value
+nothing else here reads or writes. `RXR-3` (administration device) and `RXR-6` (site
+modifier) are skipped for the same reason: the IG maps `RXR-3` into a `Device` extension
+this package's plain `Reference` shape can't carry, and `RXR-6` has no FHIR target in the
+IG's own map.
+
+### Reverse: FHIR → HL7v2
+
+| FHIR path                                                  | HL7v2 field | Notes                                                        |
+| ------------------------------------------------------------ | ----------- | --------------------------------------------------------------- |
+| `MedicationRequest.status`                                  | `ORC-1`     | Inverse of the forward table                                    |
+| `Medication.code`                                            | `RXO-1`     |                                                                  |
+| `...doseAndRate[0].doseRange.low`/`.high`                    | `RXO-2`/`RXO-3` |                                                             |
+| `Medication.form`                                            | `RXO-5`     |                                                                  |
+| `MedicationRequest.substitution.allowedCodeableConcept`      | `RXO-9`     |                                                                  |
+| `MedicationRequest.dispenseRequest.quantity`                 | `RXO-11`/`RXO-12` |                                                            |
+| `MedicationRequest.dispenseRequest.numberOfRepeatsAllowed`   | `RXO-13`    |                                                                  |
+| `MedicationRequest.requester.display`                        | `RXO-14`    |                                                                  |
+| `Medication.ingredient[0].strength.numerator`/`.denominator` | `RXO-18`/`19`/`25`/`26` |                                                |
+| `MedicationRequest.dosageInstruction[0].route`               | `RXR-1`     | Only written when the FHIR code has a known reverse HL7 code     |
+| `...site`/`.method`/`.additionalInstruction[0]`              | `RXR-2`/`RXR-4`/`RXR-5` | `RXR` is omitted entirely when none of route/site/method/instruction are set |
+
+`MSH`/`PID` synthesis follows the same rules as `ADT`'s reverse table above.
+
+### Not mapped
+
+Any segment other than `MSH`/`PID`/`ORC`/`RXO`/`RXR` is warned about and skipped; any FHIR
+resource other than `Patient`/`Medication`/`MedicationRequest`/`MessageHeader` is likewise
+warned about and skipped on the reverse direction.
+
+### Worked example
+
+Input (`samples/rde_o11.hl7`):
+
+```hl7
+MSH|^~\&|HIS|HOSP|PHARM|PHARM|20240101130000||RDE^O11|MSG004|P|2.5
+PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M|||123 Main St^^Springfield^IL^62701^USA
+ORC|NW|ORD002
+RXO|314076^Lisinopril 10 MG Oral Tablet^RXNORM|10|20|mg^milligram^UCUM|TAB^Tablet^HL70166||||G||10|tab^tablet^UCUM|2|AB1234567||||10|mg^milligram^UCUM||||||5|mL^milliliter^UCUM
+RXR|PO|LA^Left Arm^HL70163||IVPUSH^IV Push^HL70162|INST^Take with food^HL70007
+```
+
+Output (`translateHl7ToFhir` — a 4-entry Bundle: `Patient`, `Medication`,
+`MedicationRequest`, `MessageHeader`):
+
+```json
+{
+  "resourceType": "Bundle",
+  "type": "collection",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Patient",
+        "id": "patient-1",
+        "identifier": [{ "value": "MRN12345", "assigner": { "display": "HOSP" }, "type": { "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/v2-0203", "code": "MR" }] } }],
+        "name": [{ "family": "Doe", "given": ["John", "A"] }],
+        "birthDate": "1980-05-15",
+        "gender": "male",
+        "address": [{ "line": ["123 Main St"], "city": "Springfield", "state": "IL", "postalCode": "62701", "country": "USA" }]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Medication",
+        "id": "medication-1",
+        "code": { "coding": [{ "code": "314076", "display": "Lisinopril 10 MG Oral Tablet" }], "text": "Lisinopril 10 MG Oral Tablet" },
+        "form": { "coding": [{ "code": "TAB", "display": "Tablet" }], "text": "Tablet" },
+        "ingredient": [
+          {
+            "strength": {
+              "numerator": { "value": 10, "unit": "milligram", "code": "mg" },
+              "denominator": { "value": 5, "unit": "milliliter", "code": "mL" }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MedicationRequest",
+        "id": "medicationrequest-1",
+        "status": "active",
+        "intent": "order",
+        "medicationReference": { "reference": "Medication/medication-1" },
+        "subject": { "reference": "Patient/patient-1" },
+        "dosageInstruction": [
+          {
+            "doseAndRate": [
+              { "type": { "coding": [{ "code": "ordered" }] }, "doseRange": { "low": { "value": 10, "code": "mg" }, "high": { "value": 20, "code": "mg" } } }
+            ],
+            "route": { "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/v3-RouteOfAdministration", "code": "PO", "display": "Oral" }] },
+            "site": { "coding": [{ "code": "LA", "display": "Left Arm" }], "text": "Left Arm" },
+            "method": { "coding": [{ "code": "IVPUSH", "display": "IV Push" }], "text": "IV Push" },
+            "additionalInstruction": [{ "coding": [{ "code": "INST", "display": "Take with food" }], "text": "Take with food" }]
+          }
+        ],
+        "substitution": { "allowedCodeableConcept": { "coding": [{ "code": "G" }] } },
+        "dispenseRequest": { "quantity": { "value": 10, "code": "tab", "unit": "tablet" }, "numberOfRepeatsAllowed": 2 },
+        "requester": { "display": "AB1234567" }
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "MessageHeader",
+        "id": "messageheader-1",
+        "source": { "name": "HIS", "endpoint": "urn:hl7v2:HIS" },
+        "destination": [{ "name": "PHARM", "endpoint": "urn:hl7v2:PHARM" }],
+        "eventCoding": { "system": "http://terminology.hl7.org/CodeSystem/v2-0003", "code": "O11", "display": "RDE^O11" }
+      }
+    }
+  ]
+}
+```
+
+---
+
+## Message metadata (SFT, MSA) and IAM (patient adverse reaction information)
+
+Three more segment maps this package implements, each attaching to whichever message type
+already carries the segment rather than being tied to one message type.
+
+### Forward: HL7v2 → FHIR
+
+| HL7v2 field | FHIR path                                     | Notes                                                                                             |
+| ----------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `SFT-2`     | `MessageHeader.source.version`                | Software certified version/release number                                                          |
+| `SFT-3`     | `MessageHeader.source.software`               | Software product name                                                                              |
+| `MSA-1`     | `MessageHeader.response.code`                 | HL70008 → FHIR response-code, via `table-hl70008-to-messageheader-response-code`                    |
+| `MSA-2`     | `MessageHeader.response.identifier`           | Acknowledged message's control ID (only read when `MSA-1` maps to a known response code)            |
+| `IAM-3`     | `AllergyIntolerance.code`                     | Allergen code                                                                                        |
+| `IAM-5`     | `AllergyIntolerance.reaction[0].manifestation[0].text` | Reaction description                                                                        |
+| `IAM-7`     | `AllergyIntolerance.identifier[0]`            | The signal that distinguishes an `IAM`-sourced `AllergyIntolerance` from an `AL1`-sourced one on the reverse direction |
+| `IAM-11`    | `AllergyIntolerance.onsetDateTime`             |                                                                                                       |
+
+More detail on each segment:
+
+- **`SFT`** (Software Segment) → `MessageHeader.source.version`/`.source.software`, per the
+  IG's "Segment SFT to MessageHeader Map". `SFT-1` (vendor organization) and `SFT-4`/`5`/`6`
+  (binary ID/product info/install date) are skipped — the IG maps them into a `MessageHeader`
+  extension this package's plain interface doesn't carry, and (for `SFT-1` specifically)
+  producing a `Device` from it would collide with the `Device` this package already produces
+  from `PRT` on `ORM`/`OML`.
+- **`MSA`** (Message Acknowledgment) → `MessageHeader.response`, per the IG's "Segment MSA to
+  MessageHeader Map". `MSA-1`'s HL70008 ack code maps through the
+  `table-hl70008-to-messageheader-response-code` vocabulary table (`AA`/`CA`→`ok`,
+  `AE`/`CE`→`transient-error`, `AR`/`CR`→`fatal-error`); `MSA-2` carries the acknowledged
+  message's control ID into `response.identifier`. `MSA-3` through `MSA-8` have no FHIR
+  target in the IG's own map.
+- **`IAM`** (Patient Adverse Reaction Information) → `AllergyIntolerance`, per the IG's
+  "Segment IAM to AllergyIntolerance Map" — a newer alternative to `AL1` (see `ADT^A01`
+  above) producing the same resource type. `IAM-3`→`code`, `IAM-5`→
+  `reaction[0].manifestation[0].text`, `IAM-7`→`identifier[0]`, `IAM-11`→`onsetDateTime`.
+  `IAM-2`/`IAM-4`'s dual category/severity-vs-criticality encoding and `IAM-14`/`IAM-15`'s
+  conditional-on-relationship recorder dispatch aren't implemented — this package has no
+  per-field way to record which of two possible interpretations a source value took, so a
+  lossy default would silently pick one on every round-trip rather than surfacing the
+  ambiguity. Since `AL1` carries no identifier field, an `AllergyIntolerance` with one only
+  ever came from `IAM` — that's the signal the reverse direction uses to write it back to
+  `IAM` instead of `AL1`.
+
+All three apply to any message type this package supports; the worked example below uses
+`ADT^A01` as the host message, but the same `SFT`/`MSA` handling attaches identically to
+`ORU^R01`, `ORM^O01`, `VXU^V04`, `SIU^S12`, `OML^O21`, `MDM^T02`, and `RDE^O11`.
+
+### Worked example
+
+Input (`samples/adt_a01_metadata.hl7`):
+
+```hl7
+MSH|^~\&|HIS|HOSP|ADT|HOSP|20240101120000||ADT^A01|MSG021|P|2.5
+SFT|Acme Health^^^^^XX^^^12345|3.2.1|OrderEntry
+MSA|AA|MSG000
+EVN|A01|20240101120000
+PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M
+PV1|1|I|ICU^101^A^^^HOSP||||1234^Smith^Jane^M^MD
+IAM|1|DA|7980^Penicillin^RXNORM||Rash||MRN12345^^^HOSP^MR||||20230101
+```
+
+Output (`translateHl7ToFhir` — the `AllergyIntolerance` and `MessageHeader` entries; the
+bundle also includes `Patient`, `Encounter`, `Location`, and `Practitioner`, same as
+`ADT^A01`'s worked example above):
+
+```json
+{
+  "resourceType": "AllergyIntolerance",
+  "id": "allergyintolerance-1",
+  "clinicalStatus": { "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/allergyintolerance-clinical", "code": "active" }] },
+  "patient": { "reference": "Patient/patient-1" },
+  "identifier": [{ "value": "MRN12345", "assigner": { "display": "HOSP" }, "type": { "coding": [{ "code": "MR" }] } }],
+  "code": { "coding": [{ "code": "7980", "display": "Penicillin" }], "text": "Penicillin" },
+  "reaction": [{ "manifestation": [{ "text": "Rash" }] }],
+  "onsetDateTime": "2023-01-01"
+}
+```
+
+```json
+{
+  "resourceType": "MessageHeader",
+  "id": "messageheader-1",
+  "source": { "name": "HIS", "endpoint": "urn:hl7v2:HIS", "version": "3.2.1", "software": "OrderEntry" },
+  "destination": [{ "name": "ADT", "endpoint": "urn:hl7v2:ADT" }],
+  "eventCoding": { "system": "http://terminology.hl7.org/CodeSystem/v2-0003", "code": "A01", "display": "ADT^A01" },
+  "response": { "code": "ok", "identifier": "MSG000" }
 }
 ```
 

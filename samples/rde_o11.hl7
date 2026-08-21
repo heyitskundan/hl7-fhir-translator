@@ -1,0 +1,5 @@
+MSH|^~\&|HIS|HOSP|PHARM|PHARM|20240101130000||RDE^O11|MSG004|P|2.5
+PID|1||MRN12345^^^HOSP^MR||Doe^John^A||19800515|M|||123 Main St^^Springfield^IL^62701^USA
+ORC|NW|ORD002
+RXO|314076^Lisinopril 10 MG Oral Tablet^RXNORM|10|20|mg^milligram^UCUM|TAB^Tablet^HL70166||||G||10|tab^tablet^UCUM|2|AB1234567||||10|mg^milligram^UCUM||||||5|mL^milliliter^UCUM
+RXR|PO|LA^Left Arm^HL70163||IVPUSH^IV Push^HL70162|INST^Take with food^HL70007

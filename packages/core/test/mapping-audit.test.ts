@@ -31,6 +31,12 @@ const AUDITS: MessageTypeAudit[] = [
   { heading: "## SIU^S12 (appointment scheduling)", sampleFile: "siu_s12.hl7" },
   { heading: "## OML^O21 (laboratory order)", sampleFile: "oml_o21.hl7" },
   { heading: "## MDM^T02 (document management)", sampleFile: "mdm_t02.hl7" },
+  { heading: "## ADT^A40 (merge patient)", sampleFile: "adt_a40.hl7" },
+  { heading: "## RDE^O11 (pharmacy/treatment encoded order)", sampleFile: "rde_o11.hl7" },
+  {
+    heading: "## Message metadata (SFT, MSA) and IAM (patient adverse reaction information)",
+    sampleFile: "adt_a01_metadata.hl7",
+  },
 ];
 
 /** Extracts the text between a `## ...` heading and the next `## ` heading (or end of doc). */

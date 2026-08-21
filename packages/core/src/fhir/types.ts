@@ -81,10 +81,10 @@ export interface Quantity {
   code?: string;
 }
 
-/** A low/high bound, e.g. a lab reference range. */
+/** A low/high bound, e.g. a lab reference range or a dose range (`code` covers the unit-as-coded-value case a plain dose amount needs, e.g. RXO-4). */
 export interface Range {
-  low?: { value?: number; unit?: string };
-  high?: { value?: number; unit?: string };
+  low?: { value?: number; unit?: string; code?: string };
+  high?: { value?: number; unit?: string; code?: string };
 }
 
 /** FHIR resource metadata. Present in the type for shape-completeness; not populated or read by any mapper. */
@@ -239,6 +239,7 @@ export interface AllergyIntolerance {
   resourceType: "AllergyIntolerance";
   id?: string;
   meta?: Meta;
+  identifier?: Identifier[];
   clinicalStatus?: CodeableConcept;
   category?: ("food" | "medication" | "environment" | "biologic")[];
   criticality?: "low" | "high" | "unable-to-assess";
@@ -325,14 +326,18 @@ export interface Practitioner {
  * `destination[].endpoint` are FHIR-required but HL7v2 gives no real URI for them (`MSH-3`/
  * `MSH-5` are application *names*, not endpoints) — this package synthesizes a
  * `urn:hl7v2:<application>` placeholder rather than inventing a URL that doesn't exist.
+ * `source.version`/`source.software` and `response` are additionally produced from/consumed
+ * for `SFT`/`MSA` (any message type carrying one), per the IG's "Segment SFT to
+ * MessageHeader Map" and "Segment MSA to MessageHeader Map".
  */
 export interface MessageHeader {
   resourceType: "MessageHeader";
   id?: string;
   meta?: Meta;
   eventCoding?: Coding;
-  source: { name?: string; endpoint: string };
+  source: { name?: string; endpoint: string; version?: string; software?: string };
   destination?: { name?: string; endpoint: string }[];
+  response?: { identifier?: string; code: "ok" | "transient-error" | "fatal-error" };
 }
 
 /**
@@ -435,6 +440,62 @@ export interface Procedure {
   reasonCode?: CodeableConcept[];
 }
 
+/**
+ * The financial/administrative record a merged-away patient identity folds into. Produced
+ * from/consumed for `MRG` (currently the ADT^A40 mapper), per the official IG's "Segment
+ * MRG to Account Map". `status` is always synthesized as `"unknown"` — the IG's own mapping
+ * notes MRG carries no status signal, since the prior account may already be active or
+ * inactive and only the implementer's own system would know which.
+ */
+export interface Account {
+  resourceType: "Account";
+  id?: string;
+  meta?: Meta;
+  status: "active" | "inactive" | "unknown";
+  subject?: Reference[];
+  identifier?: Identifier[];
+}
+
+/**
+ * A drug product. Produced from/consumed for `RXO` (currently the RDE^O11 mapper),
+ * referenced from `MedicationRequest.medicationReference`, per the official IG's "Segment
+ * RXO to MedicationRequest Map".
+ */
+export interface Medication {
+  resourceType: "Medication";
+  id?: string;
+  meta?: Meta;
+  code?: CodeableConcept;
+  form?: CodeableConcept;
+  ingredient?: { strength?: { numerator?: Quantity; denominator?: Quantity } }[];
+}
+
+/**
+ * A pharmacy order. Produced from/consumed for `RXO`/`RXR` (currently the RDE^O11 mapper),
+ * per the official IG's "Segment RXO to MedicationRequest Map" and "Segment RXR to
+ * MedicationRequest Map". `requester` stays a display-only Reference — RXO-14 carries only
+ * a DEA number, with no name to build a real `Practitioner` from.
+ */
+export interface MedicationRequest {
+  resourceType: "MedicationRequest";
+  id?: string;
+  meta?: Meta;
+  status: "active" | "completed" | "cancelled" | "unknown";
+  intent: "order";
+  medicationReference: Reference;
+  subject: Reference;
+  dosageInstruction?: {
+    doseAndRate?: { type?: CodeableConcept; doseRange?: Range }[];
+    route?: CodeableConcept;
+    site?: CodeableConcept;
+    method?: CodeableConcept;
+    additionalInstruction?: CodeableConcept[];
+  }[];
+  dispenseRequest?: { quantity?: Quantity; numberOfRepeatsAllowed?: number };
+  substitution?: { allowedCodeableConcept?: CodeableConcept };
+  requester?: Reference;
+}
+
 /** A binary/text attachment, e.g. a clinical document's content metadata. */
 export interface Attachment {
   contentType?: string;
@@ -484,7 +545,10 @@ export type FhirResource =
   | Provenance
   | Device
   | PractitionerRole
-  | CareTeam;
+  | CareTeam
+  | Account
+  | Medication
+  | MedicationRequest;
 
 /** One resource entry within a Bundle. */
 export interface BundleEntry {

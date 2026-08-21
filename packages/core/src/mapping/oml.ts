@@ -17,7 +17,9 @@ import { FhirValidationError } from "../fhir/types.js";
 import {
   CODE_SYSTEMS,
   MappingTrail,
+  buildMsa,
   buildMsh,
+  buildSft,
   fhirDateTimeToHl7,
   hl7DateTimeToFhir,
   messageHeaderFromMsh,
@@ -37,7 +39,7 @@ import {
 import { lookupVocabulary, reverseLookupVocabulary } from "./vocabulary.js";
 import { devicesToPrt, practitionerRolesToPrt, prtToDevices, prtToPractitionerRoles } from "./prt.js";
 
-const KNOWN_OML_SEGMENTS = new Set(["MSH", "PID", "ORC", "OBR", "SPM", "NTE", "TQ1", "PRT"]);
+const KNOWN_OML_SEGMENTS = new Set(["MSH", "SFT", "MSA", "PID", "ORC", "OBR", "SPM", "NTE", "TQ1", "PRT"]);
 const SPECIMEN_STATUS_TABLE = "table-hl70136-to-specimen-status";
 
 /** OML^O21 -> a Bundle with a Patient, a ServiceRequest, and a Specimen built from SPM. The ordering provider is read from ORC-12, falling back to OBR-16 when ORC-12 is absent. Throws `FhirValidationError` when PID, OBR, or SPM is missing — SPM is what distinguishes a lab order (OML^O21) from a general order (ORM^O01). */
@@ -153,6 +155,8 @@ export function fhirToOml(bundle: Bundle): { message: Hl7Message; trail: Mapping
 
   const messageHeader = bundle.entry.find((e) => e.resource.resourceType === "MessageHeader")?.resource as MessageHeader | undefined;
   const msh = buildMsh(trail, "OML", "O21", controlId, now, messageHeader);
+  const sft = buildSft(trail, messageHeader);
+  const msa = buildMsa(trail, messageHeader);
 
   const pidFields = buildPidFieldsFromPatient(patient, trail);
   const pid = segment("PID", { 1: field("1"), ...pidFields });
@@ -238,6 +242,18 @@ export function fhirToOml(bundle: Bundle): { message: Hl7Message; trail: Mapping
     }
   }
 
-  const segments = [msh, pid, orc, obr, spm, ...(tq1Segment ? [tq1Segment] : []), ...nteSegments, ...devicePrtSegments, ...rolePrtSegments];
+  const segments = [
+    msh,
+    ...(sft ? [sft] : []),
+    ...(msa ? [msa] : []),
+    pid,
+    orc,
+    obr,
+    spm,
+    ...(tq1Segment ? [tq1Segment] : []),
+    ...nteSegments,
+    ...devicePrtSegments,
+    ...rolePrtSegments,
+  ];
   return { message: { segments, delimiters, messageType: "OML^O21" }, trail };
 }

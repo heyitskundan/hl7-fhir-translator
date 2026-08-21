@@ -32,12 +32,14 @@ function with zero runtime dependencies — install it and call it, nothing else
 | `ADT^A09` (departing, tracking)  | `Patient` + `Encounter`                    | both      |
 | `ADT^A11` (cancel admit)         | `Patient` + `Encounter` (entered-in-error) | both      |
 | `ADT^A17` (swap patients)        | 2× `Patient` + `Encounter`                 | both      |
+| `ADT^A40` (merge patient)        | `Patient` + `Account`                      | both      |
 | `ORU^R01` (lab result)           | `DiagnosticReport` + `Observation[]`       | both      |
 | `ORM^O01` (order)                | `ServiceRequest`                           | both      |
 | `VXU^V04` (immunization)         | `Immunization`                             | both      |
 | `SIU^S12` (appointment)          | `Appointment`                              | both      |
 | `OML^O21` (lab order)            | `ServiceRequest` + `Specimen`              | both      |
 | `MDM^T02` (document)             | `DocumentReference`                        | both      |
+| `RDE^O11` (pharmacy order)       | `Medication` + `MedicationRequest`         | both      |
 
 Full field-level detail is in [`docs/MAPPING.md`](./docs/MAPPING.md).
 

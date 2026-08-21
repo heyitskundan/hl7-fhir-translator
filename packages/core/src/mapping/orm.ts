@@ -13,7 +13,7 @@ import type {
   ServiceRequest,
 } from "../fhir/types.js";
 import { FhirValidationError } from "../fhir/types.js";
-import { MappingTrail, buildMsh, messageHeaderFromMsh, nextMessageControlId, nowHl7DateTime } from "./common.js";
+import { MappingTrail, buildMsa, buildMsh, buildSft, messageHeaderFromMsh, nextMessageControlId, nowHl7DateTime } from "./common.js";
 import { buildPatientFromPid, buildPidFieldsFromPatient } from "./adt.js";
 import {
   buildOrcObrFromServiceRequest,
@@ -25,7 +25,7 @@ import {
 } from "./order.js";
 import { devicesToPrt, practitionerRolesToPrt, prtToDevices, prtToPractitionerRoles } from "./prt.js";
 
-const KNOWN_ORM_SEGMENTS = new Set(["MSH", "PID", "ORC", "OBR", "NTE", "TQ1", "PRT"]);
+const KNOWN_ORM_SEGMENTS = new Set(["MSH", "SFT", "MSA", "PID", "ORC", "OBR", "NTE", "TQ1", "PRT"]);
 
 /** ORM^O01 -> a Bundle with a Patient and a ServiceRequest. The ordering provider is read from ORC-12, falling back to OBR-16 when ORC-12 is absent. Throws `FhirValidationError` when PID or OBR is missing. */
 export function ormToFhir(message: Hl7Message): { bundle: Bundle; trail: MappingTrail } {
@@ -83,6 +83,8 @@ export function fhirToOrm(bundle: Bundle): { message: Hl7Message; trail: Mapping
 
   const messageHeader = bundle.entry.find((e) => e.resource.resourceType === "MessageHeader")?.resource as MessageHeader | undefined;
   const msh = buildMsh(trail, "ORM", "O01", controlId, now, messageHeader);
+  const sft = buildSft(trail, messageHeader);
+  const msa = buildMsa(trail, messageHeader);
 
   const pidFields = buildPidFieldsFromPatient(patient, trail);
   const pid = segment("PID", { 1: field("1"), ...pidFields });
@@ -120,6 +122,17 @@ export function fhirToOrm(bundle: Bundle): { message: Hl7Message; trail: Mapping
     }
   }
 
-  const segments = [msh, pid, orc, obr, ...(tq1Segment ? [tq1Segment] : []), ...nteSegments, ...devicePrtSegments, ...rolePrtSegments];
+  const segments = [
+    msh,
+    ...(sft ? [sft] : []),
+    ...(msa ? [msa] : []),
+    pid,
+    orc,
+    obr,
+    ...(tq1Segment ? [tq1Segment] : []),
+    ...nteSegments,
+    ...devicePrtSegments,
+    ...rolePrtSegments,
+  ];
   return { message: { segments, delimiters, messageType: "ORM^O01" }, trail };
 }

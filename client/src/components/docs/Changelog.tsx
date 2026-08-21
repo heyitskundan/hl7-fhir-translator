@@ -26,6 +26,10 @@ export function Changelog() {
             <li>Appointment.serviceType (from AIS-3) and Appointment.comment (from NTE-3) in SIU^S12</li>
             <li>A data-driven vocabulary module (HL7 code-table lookups) replacing ad hoc inline switches</li>
             <li>Reusable HL7v2 datatype converters shared across every segment mapper</li>
+            <li>ADT^A40 (merge patient) — MRG maps to a new Account resource, referencing the surviving Patient</li>
+            <li>RDE^O11 (pharmacy order) — new Medication and MedicationRequest resource types, from RXO/RXR</li>
+            <li>IAM (the newer alternate allergy segment) alongside AL1, both producing AllergyIntolerance</li>
+            <li>SFT and MSA — software/version metadata and acknowledgment codes onto MessageHeader, for any message type</li>
           </ul>
         </div>
 
